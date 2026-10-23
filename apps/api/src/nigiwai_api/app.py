@@ -98,6 +98,9 @@ def qloo_config(settings: Settings) -> QlooConfig:
         transport=settings.qloo_transport,
         mode=settings.qloo_mode,
         harness_home=settings.qloo_harness_home,
+        rest_first_purposes=tuple(
+            p.strip() for p in settings.qloo_rest_first.split(",") if p.strip()
+        ),
     )
 
 

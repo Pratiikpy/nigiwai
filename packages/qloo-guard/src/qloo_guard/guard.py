@@ -267,6 +267,10 @@ class QlooGuard:
             )
 
         order = [t for t in self._transports if t.supports(path, params)]
+        if ctx.purpose in self.config.rest_first_purposes:
+            order.sort(
+                key=lambda t: t.name != "rest"
+            )  # stable: REST first, the rest keep their order
         if not order:
             return _Fetched(
                 status="unavailable",

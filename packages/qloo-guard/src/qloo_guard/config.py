@@ -15,6 +15,9 @@ class QlooConfig:
     transport: str = "harness"  # harness | rest (decision D5)
     mode: str = "live"  # live | record | replay
     timeout_s: float = 20.0
+    # Purposes that go to REST before the harness. The harness starts a Node process per call (measured 2.4 s extra
+    # per call on 2026-10-23: search 3.4 s via harness against 1.0 s via REST), which is too slow for type-ahead.
+    rest_first_purposes: tuple[str, ...] = ("picker",)
     harness_command: tuple[str, ...] = ("qloo",)
     harness_home: str | None = None
     # Rate: the hackathon key reported 10 requests per second on 2026-10-23; use 80% (rule: 20% headroom).

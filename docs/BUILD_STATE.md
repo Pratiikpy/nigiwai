@@ -39,7 +39,7 @@ Nigiwai (賑わい): a crowd-reading tool for venues; hero flow Soundcheck. Spec
 
 ## Open items and limits
 - Web app not built yet (Phase 1 remainder). Everything in this file marked tested was tested through the HTTP API, not through a browser.
-- The picker has not been run against live Qloo from the API (the Guard itself was, 13 live tests). Only a scripted stand-in for Qloo was used for the API tests. NOT VERIFIED against the real service.
+- The picker was run against live Qloo through the whole application once (2026-10-23, `NIGIWAI_RUN_LIVE=1 uv run pytest apps/api/tests/live`): 13 calls, all `ok`, 8 realistic queries returned the right top result for 7 (the prefix `mur` returned books, not Murakami, as PRD M3 already records), search 0.35 to 1.0 s via REST, probes `eligible=True` for 5 of 5, a 5-pick response stored. The other API tests use a scripted stand-in for Qloo.
 - Poster: names or reward text with characters outside Latin script are left off the page (the QR and URL still print) because the bundled fonts are Latin only. The picker and survey handle any script; the print layout does not yet.
 - No Qloo images on the survey page (privacy, DECISIONS D9). PRD M3 asks for images.
 - District is free text limited to a short place name; a street name without digits would still pass. Replace with an owner-defined list of districts if this proves a problem.

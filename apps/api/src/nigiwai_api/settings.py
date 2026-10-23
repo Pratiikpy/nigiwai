@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     qloo_transport: Literal["harness", "rest"] = "harness"
     qloo_mode: Literal["live", "record", "replay"] = "live"
     qloo_harness_home: str | None = None
+    # Purposes sent to REST before the harness (comma separated). Default: the type-ahead picker, because the
+    # harness adds about 2.4 s of Node start-up per call. Empty means every purpose prefers the harness.
+    qloo_rest_first: str = "picker"
 
     # Public survey
     nonce_ttl_seconds: int = 3600

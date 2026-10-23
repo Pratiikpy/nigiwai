@@ -220,12 +220,37 @@ async def test_circuit_opens_after_repeated_failures(make_rig: Any) -> None:
     assert len(t.calls) == calls_when_open  # circuit open: no call was made
 
 
+async def test_latency_critical_purposes_go_to_rest_first(make_rig: Any) -> None:
+    harness = FakeTransport(
+        name="harness", respond=lambda p, q: ok(search_body(artist_raw()), transport="harness")
+    )
+    rest = FakeTransport(name="rest", respond=lambda p, q: ok(search_body(artist_raw())))
+    rig = make_rig(transports=[harness, rest])
+    typed = await rig.guard.search(search_req("typed"), rig.guard.new_context("picker"))
+    assert typed.transport == "rest" and len(harness.calls) == 0
+    asked = await rig.guard.search(search_req("asked"), rig.guard.new_context("ask"))
+    assert (
+        asked.transport == "harness" and len(rest.calls) == 1
+    )  # other purposes keep the harness first
+
+
+async def test_picker_falls_back_to_the_harness_when_rest_fails(make_rig: Any) -> None:
+    rest = FakeTransport(name="rest")
+    rest.queue = [TransportError("rest down", retryable=False)]
+    harness = FakeTransport(
+        name="harness", respond=lambda p, q: ok(search_body(artist_raw()), transport="harness")
+    )
+    rig = make_rig(transports=[harness, rest])
+    res = await rig.guard.search(search_req(), rig.guard.new_context("picker"))
+    assert res.status == "ok" and res.transport == "harness"
+
+
 async def test_harness_failure_falls_back_to_rest(make_rig: Any) -> None:
     harness = FakeTransport(name="harness")
     harness.queue = [TransportError("harness exited 1", retryable=False)]
     rest = FakeTransport(name="rest", respond=lambda p, q: ok(search_body(artist_raw())))
     rig = make_rig(transports=[harness, rest])
-    res = await rig.guard.search(search_req(), rig.guard.new_context("picker"))
+    res = await rig.guard.search(search_req(), rig.guard.new_context("ask"))
     assert res.status == "ok" and res.transport == "rest"
     assert any(e.rule == "transport" and "rest" in e.detail for e in res.rule_events)
 
