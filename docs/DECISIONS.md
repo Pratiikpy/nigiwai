@@ -50,3 +50,14 @@ Evidence, all VERIFIED on 2026-10-23 against `@qloo/qloo-harness` 0.1.26 and the
 ## D8. LLM provider (2026-10-23)
 - **Decision:** a provider adapter with structured outputs. The first provider is Anthropic (the Sonnet-class family that ran proof F). Without a configured key every LLM-backed feature falls back to deterministic templates, and the Ask agent says plainly that it is unavailable.
 - **Why:** reading `~/.secrets/anthropic-promo.env` is not authorised by the goal; see HUMAN.md H1.
+
+## D9. Operational decisions made while building the platform (2026-10-23)
+
+- **Database and Redis hosts are `127.0.0.1`, not `localhost`.** On Windows with Docker Desktop, `localhost` resolves to IPv6 first and psycopg waited the full 8-second connect timeout on every connection (measured: 127.0.0.1 0.01 s, localhost 8.02 s).
+- **Row-level security without FORCE.** The application role does not own the tables, so RLS binds it; the migration role owns the tables and bypasses RLS, which is what lets the `SECURITY DEFINER` functions work on any Postgres host without a BYPASSRLS role. The API checks at start-up that its role is not a superuser, BYPASSRLS or the table owner (`assert_rls_effective`) and refuses to run otherwise. Alternative considered: FORCE RLS plus a BYPASSRLS function owner; rejected because managed Postgres services often cannot grant BYPASSRLS.
+- **Tenants are created only by `create_tenant()`.** A direct INSERT into `tenant` or `membership` is denied by policy, so a signed-in user cannot enrol themselves in an existing tenant. Membership writes require the caller to be an owner of the tenant in scope.
+- **QR tokens are stored hashed (lookup) and AES-GCM encrypted (so an owner can reprint a poster).** Key derived from the application secret by HKDF. Alternative considered: hash only, which makes a lost poster unrecoverable and forces rotation. Rotation replaces both, so every printed copy of the old code stops working.
+- **Minimum three picks per response by default (`min_picks`, owner-adjustable 1 to 10).** PRD M2 says "about 5 picks"; tribes need enough signal per person. Not yet tested against completion rates.
+- **No Qloo images are shown on the customer survey (yet).** Loading Qloo's image URLs from a guest's phone would send the guest's address to a third-party host. PRD M3 lists images; this is an open item (BUILD_STATE) until an image route through our own server is checked against Qloo's terms.
+- **Free-text district is restricted to a short place name** (no `@`, links or 5+ digit runs), so the field cannot carry an email address or street address.
+- **Honeypot, too-fast and burst responses:** a filled honeypot returns a normal-looking success and stores nothing; a response faster than `min_completion_seconds` or beyond 40 per QR point per ten minutes is stored as `quarantined` and excluded from analysis (counted for the owner as "held for review").

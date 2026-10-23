@@ -15,6 +15,7 @@ from .errors import (
 from .factory import build_guard
 from .guard import QlooGuard
 from .models import (
+    PICKER_TYPES,
     AreaRef,
     CompareResult,
     DemographicsItem,
@@ -49,6 +50,7 @@ from .requests import (
 from .trace import CallContext, CallRecord, MemoryRecorder, TraceRecorder
 
 __all__ = [
+    "PICKER_TYPES",
     "AreaRef",
     "ArtistInsights",
     "BookInsights",

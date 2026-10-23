@@ -19,6 +19,11 @@ class RegistryEntry:
     types: tuple[str, ...]
     name: str = ""
     eligible: bool | None = None  # None = not probed yet
+    # Display details carried from search results so a picker can show them. Absent on probe-only entries.
+    popularity: float | None = None
+    description: str | None = None
+    release_year: int | None = None
+    musicbrainz_id: str | None = None
 
 
 class EntityRegistry(Protocol):
@@ -36,13 +41,30 @@ class MemoryRegistry:
 
     async def put(self, entry: RegistryEntry) -> None:
         old = self._items.get(entry.entity_id)
-        if old is not None and entry.eligible is None:
-            entry.eligible = old.eligible
+        if old is not None:
+            if entry.eligible is None:
+                entry.eligible = old.eligible
+            entry.name = entry.name or old.name
+            entry.description = entry.description or old.description
+            entry.popularity = entry.popularity if entry.popularity is not None else old.popularity
+            entry.release_year = (
+                entry.release_year if entry.release_year is not None else old.release_year
+            )
+            entry.musicbrainz_id = entry.musicbrainz_id or old.musicbrainz_id
         self._items[entry.entity_id] = entry
 
 
 def entry_from_entity(e: Entity, eligible: bool | None = None) -> RegistryEntry:
-    return RegistryEntry(entity_id=e.entity_id, types=e.types, name=e.name, eligible=eligible)
+    return RegistryEntry(
+        entity_id=e.entity_id,
+        types=e.types,
+        name=e.name,
+        eligible=eligible,
+        popularity=e.popularity,
+        description=e.description,
+        release_year=e.release_year,
+        musicbrainz_id=e.musicbrainz_id,
+    )
 
 
 def has_forbidden_type(entry: RegistryEntry) -> bool:
