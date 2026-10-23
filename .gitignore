@@ -1,0 +1,49 @@
+# secrets and local config
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.secrets/
+
+# Qloo data must never be committed (kit terms): recorded responses, caches, fixtures
+private/
+fixtures-private/
+*.qloo.json
+.qloo-cache/
+.qloo-home/
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+*.egg-info/
+dist/
+build/
+htmlcov/
+.coverage
+
+# node
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+playwright-report/
+test-results/
+.pnpm-store/
+
+# editors and os
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# runtime artefacts
+*.log
+tmp/
+.tmp/
