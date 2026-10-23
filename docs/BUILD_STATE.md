@@ -15,7 +15,7 @@ Nigiwai (賑わい): a crowd-reading tool for venues; hero flow Soundcheck. Spec
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Repo, tooling, docs | DONE (commit 1) |
-| 1 foundation | M21 Qloo Guard, M14 platform, M3 picker, M2 survey and QR | IN PROGRESS: Guard (M21), database, API platform (M14), picker backend (M3), survey and QR backend (M2) built and tested; NOT DONE: the web app (survey page and owner screens), Dockerfiles, a live-Qloo run of the picker, the `just check` recipe over the whole workspace |
+| 1 foundation | M21 Qloo Guard, M14 platform, M3 picker, M2 survey and QR | DONE for what is listed under Test evidence; open items below (real-phone timing, 429 onset, places as picks, CI not yet run) |
 | 2 tribes, public start, card | M4, M7, M13, M15, M24 | NOT STARTED |
 | 3 map-first hero flow | M6, M19 Soundcheck, M9 acts, M23 panel, M22 Brief | NOT STARTED |
 | 3b trust and submission | M25 | NOT STARTED |
@@ -30,18 +30,25 @@ Nigiwai (賑わい): a crowd-reading tool for venues; hero flow Soundcheck. Spec
 - Node 24.20, pnpm 10.32, uv 0.11, Python 3.11 and 3.13 on the machine (3.12 via uv), just 1.57.
 - No LLM key is authorised yet (HUMAN H1).
 
-## Test evidence
-- `uv run pytest` (whole workspace, run 2026-10-23): 196 passed, 13 skipped (the live Qloo tests, which spend quota and need `NIGIWAI_RUN_LIVE=1`). ruff clean, mypy --strict clean on `apps/api/src` and `packages/qloo-guard/src`. The API tests need `just up` (Postgres, Redis) and rebuild the test database from the migrations on every run.
-- API tests by area: auth 17, tenancy and RLS 13, public survey 23, picker 14, owner 10, poster 5, platform 13. Negative control: with RLS disabled on `business` and the membership policy opened, 5 of the 13 tenancy tests failed, so they do detect a broken boundary.
-- Guard live tests: 13 passed on 2026-10-23 (`NIGIWAI_RUN_LIVE=1 uv run pytest packages/qloo-guard/tests/live -m live`): REST and harness return the same ids; all five place category tags select real places inside the radius; eligibility probe; `/entities` batch with `is_closed`; rate-limit headers reach the ledger.
-- Bugs found by tests and fixed: insights entity types live in `subtype`; the Windows `.cmd` shim breaks JSON arguments; a NUL byte in a picker query or a name caused a database error (now rejected or cleaned); a newline in the district slipped past the check; the picker re-offered an entity already found ineligible; "yes" was accepted as a boolean and "51.5" as a number (the API is now strict); a common password ("password1234") was accepted (now refused against a bundled list); `localhost` cost 8 s per database connection on this machine (now `127.0.0.1`).
-- The poster QR was scanned from the rendered PDF with OpenCV and decodes to the survey URL (A4, A6, Latin and non-Latin names). Looked at on screen: layout is clean.
+## Test evidence (2026-10-23)
+- `just check` passed: ruff, eslint, mypy --strict, tsc, 103 Guard unit tests, 7 web unit tests, 96 integration tests (API against real Postgres and Redis with a scripted Qloo; the database is rebuilt from the migrations each run).
+- Browser tests in real Chrome (`pnpm --filter @nigiwai/web e2e`, against the running API, web app, Postgres, Redis and the live Qloo key): 16 passed on a Pixel 7 profile and a 1440x900 desktop. They cover the owner journey (sign up, venue, survey, poster, overview) and the guest journey (consent, notice sheet, picker, picks, reload keeps the draft, about, send, receipt, removal, what was stored in the database), plus: closed code, search failing then retrying, nothing found, rate limit, expired nonce retried silently, a pick Qloo refuses, wrong receipt. Every state has an axe-core accessibility check (zero violations), a console and failed-request watch (zero), and a screenshot that was looked at (light and dark for the main screens).
+- Live Qloo through the whole application: `NIGIWAI_RUN_LIVE=1 uv run pytest apps/api/tests/live` (13 calls, search 0.35 to 1.0 s via REST; 7 of 8 realistic queries put the right item first, the prefix `mur` did not, as PRD M3 already records).
+- The production-shaped stack (`docker-compose.prod.yml`) was built and started: migrations as the owner role, API as the non-owner role (the RLS start-up check passed), sign-up through the web proxy returned 201 with a Secure, HttpOnly cookie; both images build; the harness is present in the API image. Torn down afterwards.
+- The Qloo key was searched for in the API and web logs, both databases and the whole repository tree: not found.
+- Negative controls: with row-level security switched off, 5 of 13 tenancy tests failed, so they do detect a broken boundary.
+- Bugs found by the tests and fixed (not exhaustive): insights entity types live in `subtype`; the Windows `.cmd` shim breaks JSON arguments; NUL in a query or name caused a database error; a newline slipped past the district check; an entity already found ineligible was offered again; "yes" was accepted as a boolean; a common password was accepted; `localhost` cost 8 s per connection; a browser reload restored a draft that a 4 s quarantine then wrongly held; the venue form lost its "Saved" message because it remounted; a 404 for "no survey yet" logged a console error; the phone top bar stretched; two clear buttons in the search box; a region landmark was missing.
+- The QR in the poster PDF was scanned with OpenCV and decodes to the survey URL (A4, A6, Latin and non-Latin names).
 
 ## Open items and limits
-- Web app not built yet (Phase 1 remainder). Everything in this file marked tested was tested through the HTTP API, not through a browser.
-- The picker was run against live Qloo through the whole application once (2026-10-23, `NIGIWAI_RUN_LIVE=1 uv run pytest apps/api/tests/live`): 13 calls, all `ok`, 8 realistic queries returned the right top result for 7 (the prefix `mur` returned books, not Murakami, as PRD M3 already records), search 0.35 to 1.0 s via REST, probes `eligible=True` for 5 of 5, a 5-pick response stored. The other API tests use a scripted stand-in for Qloo.
-- Poster: names or reward text with characters outside Latin script are left off the page (the QR and URL still print) because the bundled fonts are Latin only. The picker and survey handle any script; the print layout does not yet.
-- No Qloo images on the survey page (privacy, DECISIONS D9). PRD M3 asks for images.
-- District is free text limited to a short place name; a street name without digits would still pass. Replace with an owner-defined list of districts if this proves a problem.
-- Minimum three picks is a choice (D9), untested against completion.
-- Production Postgres must run migrations as the table-owner role and the API as the separate non-owner role `nigiwai_app`; the API refuses to start otherwise.
+- **NOT VERIFIED: speed with real people.** The PRD target (a real phone, median 20 s, five phones) cannot be measured here. The scripted run completes in a few seconds, which says nothing about people. Copy says no time claim.
+- **NOT VERIFIED: the 429 onset and concurrent scanners.** No load test against live Qloo has been run; the Guard keeps to 8 requests per second by design and the picker is capped at 20 live searches per sitting.
+- **NOT VERIFIED: the CI workflow** (`.github/workflows/ci.yml`) has not run, because nothing is pushed.
+- **Places are not pickable** (PRD M3 lists places). Place search needs a location-bounded design and the Guard's place rules; not built.
+- **No Qloo images on the survey** (privacy, D9), although PRD M3 lists them.
+- **Posters:** names or reward text outside Latin script are left off the printed page (the QR and URL still print) because the bundled fonts are Latin only. The survey and picker handle any script.
+- **District is free text** limited to a short place name; a street name without digits would still pass. Replace with an owner-defined list if this proves a problem.
+- Minimum three picks and the 2 s quarantine threshold are choices (D9, D11), untested against real guests.
+- Reverse proxy must overwrite `X-Forwarded-For` (README), or rate limits can be dodged.
+- No team invitations yet (membership roles exist and are enforced; there is no screen to add a member). No password reset or email verification (no email service is authorised, HUMAN H2).
+- Production Postgres: migrations as the table-owner role, the API as `nigiwai_app`.

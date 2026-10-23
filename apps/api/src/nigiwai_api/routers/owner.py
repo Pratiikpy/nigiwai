@@ -98,6 +98,32 @@ async def create_business(body: BusinessIn, state: State, access: Writer) -> Bus
     return _business(row)
 
 
+@router.put("/businesses/{business_id}")
+async def update_business(
+    business_id: UUID, body: BusinessIn, state: State, access: Writer
+) -> BusinessOut:
+    async with scope(state, access) as conn:
+        row = (
+            await conn.execute(
+                text(
+                    "UPDATE business SET name = :n, type = :ty, language = :l, currency = :c WHERE id = :i"
+                    " RETURNING id, tenant_id, name, type, language, currency"
+                ),
+                {
+                    "i": business_id,
+                    "n": body.name,
+                    "ty": body.type,
+                    "l": body.language,
+                    "c": body.currency,
+                },
+            )
+        ).first()
+        if row is None:
+            raise not_found()
+        await audit(conn, access, "business.update", str(business_id))
+    return _business(row)
+
+
 async def _require_business(conn: AsyncConnection, business_id: UUID) -> None:
     if (
         await conn.execute(text("SELECT 1 FROM business WHERE id = :b"), {"b": business_id})
@@ -395,7 +421,8 @@ _SURVEY_COLUMNS = "id, version, business_id, status, questions, reward, consent_
 
 
 @router.get("/businesses/{business_id}/survey")
-async def get_survey(business_id: UUID, state: State, access: Tenant) -> SurveyOut:
+async def get_survey(business_id: UUID, state: State, access: Tenant) -> SurveyOut | None:
+    """The latest saved version, or null when the business has no survey yet (a 200, so a first visit logs no error)."""
     async with scope(state, access) as conn:
         await _require_business(conn, business_id)
         row = (
@@ -407,9 +434,7 @@ async def get_survey(business_id: UUID, state: State, access: Tenant) -> SurveyO
                 {"b": business_id},
             )
         ).first()
-    if row is None:
-        raise not_found()
-    return _survey(row)
+    return _survey(row) if row is not None else None
 
 
 @router.put("/businesses/{business_id}/survey")

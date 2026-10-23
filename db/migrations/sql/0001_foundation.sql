@@ -309,13 +309,13 @@ CREATE POLICY tenant_update ON tenant FOR UPDATE
 
 CREATE OR REPLACE FUNCTION public_resolve_qr(p_hash bytea)
 RETURNS TABLE (
-  tenant_id uuid, qr_point_id uuid, location_id uuid, business_name text, location_name text, timezone text,
+  tenant_id uuid, qr_point_id uuid, location_id uuid, business_name text, location_name text, qr_label text, timezone text,
   survey_id uuid, survey_version integer, questions jsonb, reward jsonb, consent_text_version text,
   consent_body text, consent_language text
 )
 LANGUAGE sql SECURITY DEFINER SET search_path = public AS
 $$
-  SELECT q.tenant_id, q.id, q.location_id, b.name, l.name, l.timezone,
+  SELECT q.tenant_id, q.id, q.location_id, b.name, l.name, q.label, l.timezone,
          s.id, s.version, s.questions, s.reward, s.consent_text_version, c.body, c.language
   FROM qr_point q
   JOIN location l ON l.id = q.location_id

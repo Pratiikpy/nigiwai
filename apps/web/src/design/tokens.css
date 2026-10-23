@@ -1,0 +1,471 @@
+/* Nigiwai design tokens.
+   Three directions (data-dir = a | b | c) x two themes (data-theme = light | dark).
+   Tokens are scoped by attribute, so any container can carry its own direction and theme.
+   Every colour pair used for text is checked by tools/check_contrast.py. */
+
+/* ---------- Shared, direction-independent tokens ---------- */
+:root,
+[data-dir] {
+  /* Spacing: 4 px base */
+  --s-0: 0;
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-7: 32px;
+  --s-8: 40px;
+  --s-9: 48px;
+  --s-10: 64px;
+  --s-11: 80px;
+  --s-12: 96px;
+
+  /* Type scale (px). Body is 16 so form fields never trigger mobile zoom. */
+  --t-xs: 0.75rem;     /* 12 */
+  --t-sm: 0.875rem;    /* 14 */
+  --t-md: 1rem;        /* 16 */
+  --t-lg: 1.125rem;    /* 18 */
+  --t-xl: 1.375rem;    /* 22 */
+  --t-2xl: 1.75rem;    /* 28 */
+  --t-3xl: 2.25rem;    /* 36 */
+  --t-4xl: 3rem;       /* 48 */
+  --t-5xl: 4rem;       /* 64 */
+
+  --lh-tight: 1.05;
+  --lh-snug: 1.25;
+  --lh-body: 1.5;
+
+  /* Motion */
+  --dur-1: 90ms;
+  --dur-2: 160ms;
+  --dur-3: 260ms;
+  --dur-4: 420ms;
+  --ease-std: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0.1, 0.8, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+
+  /* Touch and focus */
+  --hit: 44px;          /* minimum interactive size */
+  --hit-primary: 52px;  /* primary actions on the phone */
+  --focus-w: 3px;
+  --focus-off: 2px;
+
+  /* Layout */
+  --sidebar-w: 248px;
+  --inspector-w: 392px;
+}
+
+/* =====================================================================
+   DIRECTION A: "Riso Counter"
+   Print-shop warmth: paper, two-ink overprint, hard offset shadows,
+   halftone dots. Poster grotesque + mono stamps.
+   ===================================================================== */
+[data-dir="a"] {
+  --font-display: "Bricolage Grotesque", "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Bricolage Grotesque", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --display-weight: 800;
+  --display-track: -0.025em;
+  --display-lh: 1;
+  --body-weight: 420;
+  --strong-weight: 650;
+  --eyebrow-font: var(--font-mono);
+  --eyebrow-weight: 500;
+  --eyebrow-track: 0.09em;
+  --eyebrow-case: uppercase;
+  --eyebrow-size: 0.75rem;
+
+  --r-xs: 4px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 20px;
+  --r-pill: 999px;
+  --bw: 2px;
+  --bw-hair: 1px;
+
+  --card-r: var(--r-md);
+  --chip-r: var(--r-pill);
+  --btn-r: var(--r-md);
+  --input-r: var(--r-md);
+  --tile-r: var(--r-sm);
+}
+[data-dir="a"][data-theme="light"] {
+  --bg: #f3eada;
+  --bg-sunken: #e9dec8;
+  --surface: #fffaef;
+  --surface-2: #f7eedb;
+  --surface-inv: #1b2030;
+  --ink: #1b2030;
+  --ink-2: #454b5c;
+  --ink-3: #5a5f6e;
+  --ink-inv: #fffaef;
+  --rule: #d8ccb3;
+  --rule-strong: #1b2030;
+
+  --brand: #f05a38;
+  --brand-strong: #b93219;
+  --brand-soft: #fadcd3;
+  --on-brand: #1b2030;
+  --accent: #2b4fd0;
+  --accent-soft: #dde4f9;
+  --highlight: #f4c542;
+  --on-highlight: #1b2030;
+
+  --t1: #2b4fd0;  --t1-soft: #dde4f9;
+  --t2: #e2442a;  --t2-soft: #fadcd3;
+  --t3: #0b6f5a;  --t3-soft: #d1ece4;
+  --tu: #8f8979;  --tu-soft: #e6dfcd;
+
+  --ok: #1d7448;  --ok-soft: #d6ecdd;
+  --warn: #8f5600; --warn-soft: #f7e3b8;
+  --danger: #b3261e; --danger-soft: #f8d9d4;
+
+  --focus: #2b4fd0;
+  --focus-halo: #fffaef;
+
+  --sh-col: #1b2030;
+  --e1: 2px 2px 0 var(--sh-col);
+  --e2: 4px 4px 0 var(--sh-col);
+  --e3: 7px 7px 0 var(--sh-col);
+  --overlay: rgba(27, 32, 48, 0.55);
+
+  --map-land: #efe4cf;
+  --map-block: #e3d6bb;
+  --map-water: #b9c8ee;
+  --map-park: #c3e2d2;
+  --map-road: #fffaef;
+  --map-casing: #cdbf9f;
+  --map-label: #4a4f5f;
+  --map-hex: #1b2030;
+}
+[data-dir="a"][data-theme="dark"] {
+  --bg: #14161f;
+  --bg-sunken: #0e1017;
+  --surface: #1e2132;
+  --surface-2: #272b40;
+  --surface-inv: #f3ebdb;
+  --ink: #f3ebdb;
+  --ink-2: #cbc5b6;
+  --ink-3: #a5a39f;
+  --ink-inv: #14161f;
+  --rule: #353b55;
+  --rule-strong: #8f95b8;
+
+  --brand: #ff6a4d;
+  --brand-strong: #ff8a70;
+  --brand-soft: #43241f;
+  --on-brand: #14161f;
+  --accent: #8aa3ff;
+  --accent-soft: #232b52;
+  --highlight: #f4c542;
+  --on-highlight: #1b2030;
+
+  --t1: #8aa3ff;  --t1-soft: #232b52;
+  --t2: #ff7a5e;  --t2-soft: #43241f;
+  --t3: #45d2b4;  --t3-soft: #153a35;
+  --tu: #9a9cae;  --tu-soft: #2c2f42;
+
+  --ok: #58d08a;  --ok-soft: #173a29;
+  --warn: #f2b84a; --warn-soft: #40310f;
+  --danger: #ff8479; --danger-soft: #45201d;
+
+  --focus: #f4c542;
+  --focus-halo: #14161f;
+
+  --sh-col: #07080d;
+  --e1: 2px 2px 0 var(--sh-col);
+  --e2: 4px 4px 0 var(--sh-col);
+  --e3: 7px 7px 0 var(--sh-col);
+  --overlay: rgba(5, 6, 10, 0.7);
+
+  --map-land: #1a1d2b;
+  --map-block: #222638;
+  --map-water: #26336b;
+  --map-park: #17403a;
+  --map-road: #3a4060;
+  --map-casing: #0f1119;
+  --map-label: #b7b3a6;
+  --map-hex: #f3ebdb;
+}
+
+/* =====================================================================
+   DIRECTION B: "Wall Label"
+   A quiet gallery: white sheets on a warm wall, hairlines, serif voice,
+   claret accent, museum-card labels.
+   ===================================================================== */
+[data-dir="b"] {
+  --font-display: "Newsreader", "Iowan Old Style", Georgia, "Times New Roman", serif;
+  --font-body: "Hanken Grotesk", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --display-weight: 400;
+  --display-track: -0.015em;
+  --display-lh: 1.08;
+  --body-weight: 400;
+  --strong-weight: 650;
+  --eyebrow-font: var(--font-body);
+  --eyebrow-weight: 650;
+  --eyebrow-track: 0.13em;
+  --eyebrow-case: uppercase;
+  --eyebrow-size: 0.75rem;
+
+  --r-xs: 0;
+  --r-sm: 2px;
+  --r-md: 2px;
+  --r-lg: 4px;
+  --r-pill: 999px;
+  --bw: 1px;
+  --bw-hair: 1px;
+
+  --card-r: var(--r-md);
+  --chip-r: var(--r-sm);
+  --btn-r: var(--r-sm);
+  --input-r: var(--r-sm);
+  --tile-r: 0;
+}
+[data-dir="b"][data-theme="light"] {
+  --bg: #f6f3ec;
+  --bg-sunken: #ece7dc;
+  --surface: #ffffff;
+  --surface-2: #faf8f3;
+  --surface-inv: #1a1917;
+  --ink: #1a1917;
+  --ink-2: #4b4943;
+  --ink-3: #66635b;
+  --ink-inv: #ffffff;
+  --rule: #dad5c8;
+  --rule-strong: #1a1917;
+
+  --brand: #8b2635;
+  --brand-strong: #8b2635;
+  --brand-soft: #f3dfe2;
+  --on-brand: #ffffff;
+  --accent: #35567f;
+  --accent-soft: #dfe6ef;
+  --highlight: #e8d9a8;
+  --on-highlight: #1b2030;
+
+  --t1: #35567f;  --t1-soft: #dfe6ef;
+  --t2: #a9691a;  --t2-soft: #f1e4cd;
+  --t3: #3f7a5e;  --t3-soft: #d9e9e0;
+  --tu: #8a857a;  --tu-soft: #e8e4d9;
+
+  --ok: #2d6a4a;  --ok-soft: #dcebe2;
+  --warn: #8a5a00; --warn-soft: #f3e4c2;
+  --danger: #a3261f; --danger-soft: #f5dcd9;
+
+  --focus: #35567f;
+  --focus-halo: #ffffff;
+
+  --sh-col: rgba(26, 25, 23, 0.14);
+  --e1: 0 0 0 transparent;
+  --e2: 0 1px 2px rgba(26, 25, 23, 0.08), 0 10px 28px -14px rgba(26, 25, 23, 0.22);
+  --e3: 0 2px 4px rgba(26, 25, 23, 0.1), 0 24px 48px -20px rgba(26, 25, 23, 0.3);
+  --overlay: rgba(26, 25, 23, 0.45);
+
+  --map-land: #f2eee4;
+  --map-block: #e9e4d6;
+  --map-water: #d3dfe8;
+  --map-park: #dce6d4;
+  --map-road: #ffffff;
+  --map-casing: #d3ccbb;
+  --map-label: #5a574f;
+  --map-hex: #1a1917;
+}
+[data-dir="b"][data-theme="dark"] {
+  --bg: #121211;
+  --bg-sunken: #0c0c0b;
+  --surface: #1b1b19;
+  --surface-2: #232321;
+  --surface-inv: #eeeae1;
+  --ink: #eeeae1;
+  --ink-2: #bfbaae;
+  --ink-3: #9d988d;
+  --ink-inv: #121211;
+  --rule: #34332f;
+  --rule-strong: #eeeae1;
+
+  --brand: #e79aa5;
+  --brand-strong: #efb0b9;
+  --brand-soft: #3a2024;
+  --on-brand: #1a1917;
+  --accent: #8fb1dd;
+  --accent-soft: #1f2a3a;
+  --highlight: #6b5c2a;
+  --on-highlight: #eeeae1;
+
+  --t1: #8fb1dd;  --t1-soft: #1f2a3a;
+  --t2: #e0a85a;  --t2-soft: #3a2d17;
+  --t3: #7dc2a0;  --t3-soft: #19332a;
+  --tu: #9a958a;  --tu-soft: #2a2925;
+
+  --ok: #7cc79c;  --ok-soft: #17301f;
+  --warn: #e6b350; --warn-soft: #382c12;
+  --danger: #f08a80; --danger-soft: #3d1e1b;
+
+  --focus: #8fb1dd;
+  --focus-halo: #121211;
+
+  --sh-col: rgba(0, 0, 0, 0.5);
+  --e1: 0 0 0 transparent;
+  --e2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 28px -14px rgba(0, 0, 0, 0.7);
+  --e3: 0 2px 4px rgba(0, 0, 0, 0.6), 0 24px 48px -20px rgba(0, 0, 0, 0.8);
+  --overlay: rgba(0, 0, 0, 0.65);
+
+  --map-land: #171715;
+  --map-block: #1f1f1c;
+  --map-water: #1f2c38;
+  --map-park: #1c2b20;
+  --map-road: #2d2c28;
+  --map-casing: #0c0c0b;
+  --map-label: #b2ada1;
+  --map-hex: #eeeae1;
+}
+
+/* =====================================================================
+   DIRECTION C: "Pebble"
+   Fresh and soft: mint-white, deep forest ink, rounded everything,
+   overlapping pebbles for overlapping tastes. Rounded display + hyperlegible body.
+   ===================================================================== */
+[data-dir="c"] {
+  --font-display: "Fredoka", "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible Next", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --display-weight: 600;
+  --display-track: -0.01em;
+  --display-lh: 1.08;
+  --body-weight: 420;
+  --strong-weight: 700;
+  --eyebrow-font: var(--font-body);
+  --eyebrow-weight: 700;
+  --eyebrow-track: 0.02em;
+  --eyebrow-case: none;
+  --eyebrow-size: 0.8125rem;
+
+  --r-xs: 8px;
+  --r-sm: 12px;
+  --r-md: 18px;
+  --r-lg: 28px;
+  --r-pill: 999px;
+  --bw: 0px;
+  --bw-hair: 1px;
+
+  --card-r: var(--r-lg);
+  --chip-r: var(--r-pill);
+  --btn-r: var(--r-pill);
+  --input-r: var(--r-md);
+  --tile-r: var(--r-sm);
+}
+[data-dir="c"][data-theme="light"] {
+  --bg: #eef6f1;
+  --bg-sunken: #e0eee5;
+  --surface: #ffffff;
+  --surface-2: #f6faf7;
+  --surface-inv: #12332b;
+  --ink: #12332b;
+  --ink-2: #3a554e;
+  --ink-3: #50695f;
+  --ink-inv: #ffffff;
+  --rule: #cfe0d5;
+  --rule-strong: #12332b;
+
+  --brand: #0e6b52;
+  --brand-strong: #0e6b52;
+  --brand-soft: #d4ece2;
+  --on-brand: #ffffff;
+  --accent: #ffd54a;
+  --accent-soft: #fff1bd;
+  --highlight: #ffd54a;
+  --on-highlight: #1b2030;
+
+  --t1: #e5533a;  --t1-soft: #fde1da;
+  --t2: #2b86c5;  --t2-soft: #d9ebf8;
+  --t3: #6d3a92;  --t3-soft: #eadff3;
+  --tu: #7e9088;  --tu-soft: #e0e9e4;
+
+  --ok: #1b7347;  --ok-soft: #d7efe1;
+  --warn: #8c5a00; --warn-soft: #fbe9b8;
+  --danger: #b3261e; --danger-soft: #fadbd6;
+
+  --focus: #0e6b52;
+  --focus-halo: #ffffff;
+
+  --sh-col: rgba(18, 51, 43, 0.16);
+  --e1: 0 1px 2px rgba(18, 51, 43, 0.1);
+  --e2: 0 2px 4px rgba(18, 51, 43, 0.06), 0 12px 28px -10px rgba(18, 51, 43, 0.24);
+  --e3: 0 4px 8px rgba(18, 51, 43, 0.08), 0 28px 56px -16px rgba(18, 51, 43, 0.34);
+  --overlay: rgba(18, 51, 43, 0.5);
+
+  --map-land: #e4f0e8;
+  --map-block: #d7e8dd;
+  --map-water: #bfe0f2;
+  --map-park: #b4dfc4;
+  --map-road: #ffffff;
+  --map-casing: #c3d9cb;
+  --map-label: #3a554e;
+  --map-hex: #12332b;
+}
+[data-dir="c"][data-theme="dark"] {
+  --bg: #0b1f19;
+  --bg-sunken: #07140f;
+  --surface: #12302a;
+  --surface-2: #1a3d35;
+  --surface-inv: #e8f5ee;
+  --ink: #e8f5ee;
+  --ink-2: #b9d3c7;
+  --ink-3: #93b4a6;
+  --ink-inv: #07140f;
+  --rule: #24473e;
+  --rule-strong: #e8f5ee;
+
+  --brand: #5ed3a8;
+  --brand-strong: #7fe0bb;
+  --brand-soft: #1c4a3d;
+  --on-brand: #07140f;
+  --accent: #ffd54a;
+  --accent-soft: #4a3f12;
+  --highlight: #ffd54a;
+  --on-highlight: #1b2030;
+
+  --t1: #ff8a70;  --t1-soft: #4a2a23;
+  --t2: #4aa3e3;  --t2-soft: #1b3a52;
+  --t3: #dcc6f5;  --t3-soft: #36264a;
+  --tu: #8fa89f;  --tu-soft: #223a33;
+
+  --ok: #62d596;  --ok-soft: #14392a;
+  --warn: #f2c14e; --warn-soft: #403411;
+  --danger: #ff8c82; --danger-soft: #472420;
+
+  --focus: #ffd54a;
+  --focus-halo: #0b1f19;
+
+  --sh-col: rgba(0, 0, 0, 0.45);
+  --e1: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --e2: 0 2px 4px rgba(0, 0, 0, 0.3), 0 12px 28px -10px rgba(0, 0, 0, 0.55);
+  --e3: 0 4px 8px rgba(0, 0, 0, 0.35), 0 28px 56px -16px rgba(0, 0, 0, 0.7);
+  --overlay: rgba(2, 10, 7, 0.7);
+
+  --map-land: #0f2a23;
+  --map-block: #14332b;
+  --map-water: #174a66;
+  --map-park: #1c5740;
+  --map-road: #2a5a4c;
+  --map-casing: #071611;
+  --map-label: #a9c8bb;
+  --map-hex: #e8f5ee;
+}
+
+/* Direction-specific motion character */
+[data-dir="a"] { --press-dur: 90ms; --pop-ease: cubic-bezier(0.34, 1.56, 0.64, 1); }
+[data-dir="b"] { --press-dur: 160ms; --pop-ease: cubic-bezier(0.2, 0, 0, 1); }
+[data-dir="c"] { --press-dur: 140ms; --pop-ease: cubic-bezier(0.34, 1.4, 0.64, 1); }
+
+@media (prefers-reduced-motion: reduce) {
+  :root, [data-dir] {
+    --dur-1: 0ms;
+    --dur-2: 0ms;
+    --dur-3: 0ms;
+    --dur-4: 0ms;
+    --press-dur: 0ms;
+  }
+}

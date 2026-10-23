@@ -33,6 +33,7 @@ async def test_a_member_of_another_tenant_gets_404_everywhere(world: World) -> N
         assert r.status_code == 404, (url, r.status_code)
     writes = [
         ("post", f"{base}/businesses", {"name": "Hijack", "type": "bar"}),
+        ("put", f"{base}/businesses/{ids['b']}", {"name": "Hijack", "type": "bar"}),
         ("post", f"{base}/businesses/{ids['b']}/locations", {"name": "Hijack"}),
         ("post", f"{base}/locations/{ids['l']}/qr-points", {"label": "Hijack"}),
         ("post", f"{base}/qr-points/{ids['q']}/rotate", None),

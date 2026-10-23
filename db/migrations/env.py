@@ -13,7 +13,9 @@ config = context.config
 def _url() -> str:
     url = os.environ.get("NIGIWAI_DATABASE_URL_SYNC")
     if not url:
-        raise RuntimeError("set NIGIWAI_DATABASE_URL_SYNC to the migration role's connection string")
+        raise RuntimeError(
+            "set NIGIWAI_DATABASE_URL_SYNC to the migration role's connection string"
+        )
     return url
 
 

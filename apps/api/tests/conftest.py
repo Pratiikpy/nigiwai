@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 import psycopg
@@ -26,6 +27,17 @@ from harness import (
     make_settings,
 )
 from nigiwai_api.app import create_app
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Everything under apps/api/tests needs Postgres and Redis (`just up`); the live ones also spend Qloo quota."""
+    here = Path(__file__).parent
+    for item in items:
+        path = Path(str(item.fspath))
+        if here in path.parents:
+            item.add_marker(pytest.mark.integration)
+            if "live" in path.parts:
+                item.add_marker(pytest.mark.live)
 
 
 @pytest.fixture(scope="session")

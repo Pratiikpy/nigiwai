@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: nigiwai
+          POSTGRES_PASSWORD: nigiwai-dev-only
+          POSTGRES_DB: nigiwai
+        ports: ["55432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U nigiwai" --health-interval 5s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["56379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Create the application roles
+        run: PGPASSWORD=nigiwai-dev-only psql -h 127.0.0.1 -p 55432 -U nigiwai -d nigiwai -f infra/postgres/init/01-extensions-roles.sql
+      - run: uv sync --all-packages --frozen
+      - run: pnpm install --frozen-lockfile
+      - name: Lint, types, unit and integration tests
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run mypy packages/qloo-guard/src apps/api/src
+          pnpm --filter @nigiwai/web lint
+          pnpm --filter @nigiwai/web typecheck
+          uv run pytest -m "not live"
+          pnpm --filter @nigiwai/web test
+          pnpm --filter @nigiwai/web build

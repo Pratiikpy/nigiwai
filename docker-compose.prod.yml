@@ -1,0 +1,83 @@
+# Production-shaped stack: Postgres (PostGIS), Redis, a one-shot migration, the API and the web app.
+# Nothing here creates cloud accounts; it runs anywhere Docker runs. Copy .env.prod.example to .env.prod, fill it in, then:
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+name: nigiwai
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nigiwai_owner
+      POSTGRES_PASSWORD: ${NIGIWAI_OWNER_DB_PASSWORD:?set NIGIWAI_OWNER_DB_PASSWORD}
+      POSTGRES_DB: nigiwai
+      NIGIWAI_APP_DB_PASSWORD: ${NIGIWAI_APP_DB_PASSWORD:?set NIGIWAI_APP_DB_PASSWORD}
+      NIGIWAI_WORKER_DB_PASSWORD: ${NIGIWAI_WORKER_DB_PASSWORD:?set NIGIWAI_WORKER_DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/prod-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nigiwai_owner -d nigiwai"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: "no"
+    working_dir: /app
+    command: ["alembic", "-c", "db/alembic.ini", "upgrade", "head"]
+    environment:
+      NIGIWAI_DATABASE_URL_SYNC: postgresql+psycopg://nigiwai_owner:${NIGIWAI_OWNER_DB_PASSWORD}@postgres:5432/nigiwai
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      NIGIWAI_ENV: production
+      NIGIWAI_DATABASE_URL: postgresql+asyncpg://nigiwai_app:${NIGIWAI_APP_DB_PASSWORD}@postgres:5432/nigiwai
+      NIGIWAI_REDIS_URL: redis://redis:6379/0
+      NIGIWAI_SECRET_KEY: ${NIGIWAI_SECRET_KEY:?set NIGIWAI_SECRET_KEY (32+ random characters)}
+      NIGIWAI_COOKIE_SECURE: "true"
+      NIGIWAI_TRUST_PROXY: "true"
+      NIGIWAI_PUBLIC_BASE_URL: ${NIGIWAI_PUBLIC_BASE_URL:?set NIGIWAI_PUBLIC_BASE_URL (https://your-domain)}
+      NIGIWAI_CORS_ORIGINS: '["${NIGIWAI_PUBLIC_BASE_URL}"]'
+      QLOO_API_KEY: ${QLOO_API_KEY:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NIGIWAI_API_ORIGIN: http://api:8000
+    restart: unless-stopped
+    ports:
+      - "${NIGIWAI_WEB_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:

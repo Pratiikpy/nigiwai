@@ -14,7 +14,15 @@ down_revision = "0001"
 branch_labels = None
 depends_on = None
 
-BODY = Path(__file__).resolve().parents[3] / "apps" / "api" / "src" / "nigiwai_api" / "consent" / "v1.en.md"
+BODY = (
+    Path(__file__).resolve().parents[3]
+    / "apps"
+    / "api"
+    / "src"
+    / "nigiwai_api"
+    / "consent"
+    / "v1.en.md"
+)
 
 
 def upgrade() -> None:

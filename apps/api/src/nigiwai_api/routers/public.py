@@ -95,6 +95,7 @@ async def get_survey(token: str, request: Request, state: State) -> PublicSurvey
     return PublicSurveyOut(
         business_name=row.business_name,
         location_name=row.location_name,
+        qr_label=row.qr_label,
         questions=resolved.questions,
         reward=SurveyReward.model_validate(row.reward) if row.reward else None,
         consent_text_version=row.consent_text_version,

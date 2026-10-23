@@ -1,0 +1,106 @@
+/* Product styles on top of the design system (src/design, copied verbatim by tools/sync_design.py). Direction A only. */
+
+/* Colour groups for the pick types the prototype did not draw. */
+.tile[data-cat="books"] { --tile-bg: var(--t3-soft); --tile-fg: var(--t3); }
+.tile[data-cat="podcasts"] { --tile-bg: var(--t1-soft); --tile-fg: var(--t1); }
+.tile[data-cat="games"] { --tile-bg: var(--t2-soft); --tile-fg: var(--t2); }
+
+/* ---------- Survey page: the phone fills the screen; on a desktop it sits centred in a frame ---------- */
+.survey-stage { min-height: 100vh; min-height: 100dvh; background: var(--bg); }
+@media (min-width: 980px) {
+  .survey-stage { display: grid; place-items: center; padding: 20px 32px; background: var(--bg-sunken); }
+}
+.survey-stage .phone { max-width: 100%; }
+.sr-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.hp { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+
+.s-foot__row .btn.grow { flex: 1 1 auto; }
+.res-note { font-size: var(--t-sm); color: var(--ink-2); line-height: 1.4; }
+.result__d { color: var(--ink-2); font-size: var(--t-sm); line-height: 1.3; overflow-wrap: anywhere; }
+.pending-spin { display: inline-block; width: 16px; height: 16px; }
+
+.receipt { display: grid; gap: var(--s-2); }
+.receipt__code { font-family: var(--font-mono); font-weight: 500; font-size: var(--t-lg); letter-spacing: 0.04em; overflow-wrap: anywhere; padding: var(--s-3) var(--s-4); background: var(--bg-sunken); border-radius: var(--r-sm); user-select: all; }
+.done__h { font-size: clamp(2.3rem, 10.4vw, 2.85rem); line-height: 0.98; }
+.done { display: grid; gap: var(--s-5); padding-top: var(--s-4); }
+
+.closed { display: grid; gap: var(--s-4); padding: var(--s-8) var(--s-5); align-content: center; min-height: 100%; }
+.closed h1 { font-size: var(--t-3xl); }
+
+/* ---------- Account pages ---------- */
+.auth { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: var(--s-5); }
+.auth__card { width: min(440px, 100%); display: grid; gap: var(--s-5); }
+[data-dir="a"] .auth__card { border: 2px solid var(--rule-strong); box-shadow: var(--e2); }
+.auth__card form { display: grid; gap: var(--s-4); }
+.auth__alt { font-size: var(--t-sm); color: var(--ink-2); }
+
+/* ---------- Owner app shell ---------- */
+.shell { min-height: 100vh; min-height: 100dvh; display: grid; align-content: start; grid-template-columns: var(--sidebar-w) minmax(0, 1fr); background: var(--bg); }
+.shell__side { position: sticky; top: 0; align-self: start; height: 100vh; height: 100dvh; display: flex; flex-direction: column; gap: var(--s-5); padding: var(--s-5) var(--s-4); background: var(--bg-sunken); border-right: 2px solid var(--rule-strong); overflow-y: auto; }
+.shell__main { min-width: 0; padding: var(--s-7) var(--s-7) var(--s-10); display: grid; gap: var(--s-6); align-content: start; max-width: 1080px; }
+.shell__top { display: none; }
+.nav a[aria-current="page"] { background: var(--surface-inv); color: var(--ink-inv); }
+.nav a .ic { flex: none; }
+.side__who { display: grid; gap: 2px; font-size: var(--t-sm); padding: var(--s-3); background: var(--surface); border-radius: var(--card-r); border: 2px solid var(--rule-strong); }
+.side__who strong { overflow-wrap: anywhere; }
+.side__foot { margin-top: auto; display: grid; gap: var(--s-2); }
+@media (max-width: 860px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .shell__side { position: fixed; inset: 0 auto 0 0; width: min(300px, 86vw); z-index: 60; transform: translateX(-102%); visibility: hidden; transition: transform var(--dur-3) var(--ease-std), visibility 0s linear var(--dur-3); }
+  .shell__side.is-open { transform: none; visibility: visible; transition: transform var(--dur-3) var(--ease-std), visibility 0s; }
+  .shell__scrim { position: fixed; inset: 0; z-index: 55; background: var(--overlay); }
+  .shell__top { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); padding: var(--s-3) var(--s-4); background: var(--bg); border-bottom: 2px solid var(--rule-strong); position: sticky; top: 0; z-index: 30; }
+  .shell__main { padding: var(--s-5) var(--s-4) var(--s-10); }
+}
+
+.page-h { display: grid; gap: var(--s-2); }
+.page-h h1 { font-size: var(--t-3xl); }
+.grid-2 { display: grid; gap: var(--s-5); grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
+.form { display: grid; gap: var(--s-5); }
+/* A fieldset used as a card: its legend sits inside the card as the title instead of straddling the border. */
+fieldset.card { min-width: 0; margin: 0; }
+fieldset.card > legend { float: left; width: 100%; padding: 0; margin: 0 0 var(--s-4); }
+fieldset.card > legend + * { clear: both; }
+.form .row { align-items: flex-start; }
+.card[data-tone="ok"] { background: var(--ok-soft); }
+[data-dir="a"] .shell .card { border: 2px solid var(--rule-strong); box-shadow: var(--e1); }
+[data-dir="a"] .shell .card--flat { box-shadow: none; }
+
+.steps { display: grid; gap: var(--s-3); counter-reset: step; }
+.steps li { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: var(--s-3); align-items: center; padding: var(--s-3) var(--s-4); background: var(--surface); border-radius: var(--card-r); }
+[data-dir="a"] .steps li { border: 2px solid var(--rule-strong); }
+.steps__n { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--rule-strong); font-family: var(--font-mono); font-weight: 500; }
+.steps li[data-done="true"] .steps__n { background: var(--ok); color: var(--surface); border-color: var(--ok); }
+.steps__t { display: grid; gap: 2px; min-width: 0; }
+.steps__t strong { overflow-wrap: anywhere; }
+
+.stat-row { display: grid; gap: var(--s-4); grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.stat { display: grid; gap: 2px; padding: var(--s-4); background: var(--surface); border-radius: var(--card-r); }
+[data-dir="a"] .stat { border: 2px solid var(--rule-strong); box-shadow: var(--e1); }
+.stat__n { font-family: var(--font-display); font-weight: var(--display-weight); font-size: var(--t-3xl); line-height: 1; font-variant-numeric: tabular-nums; }
+
+.qr-list { display: grid; gap: var(--s-4); }
+.qr-item { display: grid; gap: var(--s-3); padding: var(--s-4); background: var(--surface); border-radius: var(--card-r); }
+[data-dir="a"] .qr-item { border: 2px solid var(--rule-strong); }
+.qr-item__top { display: flex; flex-wrap: wrap; gap: var(--s-3); justify-content: space-between; align-items: center; }
+.qr-item__url { font-family: var(--font-mono); font-size: var(--t-sm); overflow-wrap: anywhere; color: var(--ink-2); }
+.qr-item[data-status="revoked"] { opacity: 0.75; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: var(--r-pill); font-size: var(--t-xs); font-weight: var(--strong-weight); background: var(--ok-soft); color: var(--ok); border: 2px solid currentColor; }
+.pill[data-tone="muted"] { background: var(--bg-sunken); color: var(--ink-2); }
+.pill[data-tone="warn"] { background: var(--warn-soft); color: var(--warn); }
+
+.toggle-list { display: grid; gap: var(--s-3); }
+.check { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: var(--s-3); align-items: start; cursor: pointer; }
+.check input { width: 22px; height: 22px; margin: 2px 0 0; accent-color: var(--ink); }
+.check span { display: grid; gap: 2px; }
+.range { display: grid; gap: var(--s-2); }
+.range input[type="number"] { max-width: 120px; }
+
+.preview-frame { aspect-ratio: 595 / 842; width: 100%; border: 2px solid var(--rule-strong); border-radius: var(--r-sm); background: var(--surface); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
+/* The browser draws its own clear button in search fields; the design has one of its own. */
+.search input[type="search"]::-webkit-search-cancel-button, .search input[type="search"]::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; }

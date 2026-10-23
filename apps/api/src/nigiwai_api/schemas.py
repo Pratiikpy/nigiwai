@@ -252,6 +252,7 @@ class SurveyOut(Strict):
 class PublicSurveyOut(Strict):
     business_name: str
     location_name: str
+    qr_label: str
     questions: SurveyQuestions
     reward: SurveyReward | None
     consent_text_version: str

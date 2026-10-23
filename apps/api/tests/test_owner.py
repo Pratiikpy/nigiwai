@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 import psycopg
@@ -18,6 +19,26 @@ async def test_business_lifecycle_and_listing(world: World) -> None:
     body = made.json()
     assert body["name"] == "Cafe Nord" and body["currency"] == "EUR" and body["language"] == "en"
     assert [b["id"] for b in (await owner.get("/businesses")).json()] == [body["id"]]
+
+
+async def test_a_business_can_be_renamed(world: World) -> None:
+    owner = await sign_up(world)
+    made = (await owner.post("/businesses", json={"name": "Old", "type": "bar"})).json()
+    renamed = await owner.put(
+        f"/businesses/{made['id']}", json={"name": "New Name", "type": "cafe", "currency": "gbp"}
+    )
+    assert renamed.status_code == 200
+    assert (renamed.json()["name"], renamed.json()["type"], renamed.json()["currency"]) == (
+        "New Name",
+        "cafe",
+        "GBP",
+    )
+    assert (
+        await owner.put(f"/businesses/{uuid.uuid4()}", json={"name": "x", "type": "bar"})
+    ).status_code == 404
+    assert (
+        await owner.put(f"/businesses/{made['id']}", json={"name": "", "type": "bar"})
+    ).status_code == 422
 
 
 async def test_business_rejects_junk(world: World) -> None:
@@ -179,7 +200,8 @@ async def test_survey_save_validation(world: World) -> None:
 async def test_publishing_without_any_survey_fails_cleanly(world: World) -> None:
     owner = await sign_up(world)
     b = (await owner.post("/businesses", json={"name": "B", "type": "bar"})).json()["id"]
-    assert (await owner.get(f"/businesses/{b}/survey")).status_code == 404
+    empty = await owner.get(f"/businesses/{b}/survey")
+    assert empty.status_code == 200 and empty.json() is None
     published = await owner.put(f"/businesses/{b}/survey", json={"publish": True})
     assert published.status_code == 200 and published.json()["version"] == 1
 

@@ -44,7 +44,9 @@ class Settings(BaseSettings):
 
     # Public survey
     nonce_ttl_seconds: int = 3600
-    min_completion_seconds: float = 4.0
+    # A response faster than this is held for review. A person with a restored draft needs about 2 s (Start, Continue,
+    # Send); a script is instant. See docs/DECISIONS.md D9.
+    min_completion_seconds: float = 2.0
     picker_calls_per_session: int = 20
 
     # Where the survey page lives: used to print QR posters
