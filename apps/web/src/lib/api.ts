@@ -137,6 +137,8 @@ export type Location = {
   curfew: string | null;
   excluded_genres: string[];
   show_nights: number[];
+  /** Monday first, null for a closed day; empty when the owner has not said. */
+  hours: ({ open: string; close: string } | null)[];
 };
 export type QrPoint = {
   id: string;

@@ -117,6 +117,22 @@ class BusinessOut(Strict):
     currency: str
 
 
+HHMM = Annotated[str, StringConstraints(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")]
+
+
+class HoursDay(Strict):
+    """One day's opening times. A closing time earlier than the opening time means the venue closes after midnight."""
+
+    open: HHMM
+    close: HHMM
+
+    @model_validator(mode="after")
+    def _a_span(self) -> HoursDay:
+        if self.open == self.close:
+            raise ValueError("opening and closing times must differ")
+        return self
+
+
 class LocationIn(Strict):
     name: Name
     address: Line | None = None
@@ -134,6 +150,15 @@ class LocationIn(Strict):
     ) = None
     excluded_genres: list[Short] = Field(default_factory=list, max_length=20)
     show_nights: list[int] = Field(default_factory=list, max_length=7)
+    # Monday first, null for a closed day; empty when the owner has not said.
+    hours: list[HoursDay | None] = Field(default_factory=list, max_length=7)
+
+    @field_validator("hours")
+    @classmethod
+    def _a_week(cls, v: list[HoursDay | None]) -> list[HoursDay | None]:
+        if v and len(v) != 7:
+            raise ValueError("hours are seven days, Monday first, with null for a closed day")
+        return v
 
     @field_validator("timezone")
     @classmethod
@@ -172,6 +197,7 @@ class LocationOut(Strict):
     curfew: str | None
     excluded_genres: list[str]
     show_nights: list[int]
+    hours: list[HoursDay | None]
 
 
 class QrPointIn(Strict):

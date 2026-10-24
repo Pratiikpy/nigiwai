@@ -18,6 +18,7 @@ from ..deps import AppState, State, Tenant, TenantAccess, Writer
 from ..schemas import (
     BusinessIn,
     BusinessOut,
+    HoursDay,
     LocationIn,
     LocationOut,
     Name,
@@ -140,7 +141,7 @@ async def _require_business(conn: AsyncConnection, business_id: UUID) -> None:
 # ---- locations ------------------------------------------------------------------------------------------------
 _LOCATION_COLUMNS = (
     "id, business_id, name, address, ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lon, radius_m, timezone,"
-    " price_level, capacity, curfew, excluded_genres, show_nights"
+    " price_level, capacity, curfew, excluded_genres, show_nights, hours"
 )
 
 
@@ -159,6 +160,10 @@ def _location(row: Any) -> LocationOut:
         curfew=row.curfew,
         excluded_genres=list(row.excluded_genres),
         show_nights=[int(n) for n in row.show_nights],
+        # a venue that never gave hours holds the column default, an empty object
+        hours=[HoursDay(**h) if h else None for h in row.hours]
+        if isinstance(row.hours, list)
+        else [],
     )
 
 
@@ -175,6 +180,9 @@ def _location_params(body: LocationIn) -> dict[str, Any]:
         "cf": body.curfew,
         "eg": list(body.excluded_genres),
         "sn": list(body.show_nights),
+        "hr": json.dumps([h.model_dump() if h else None for h in body.hours])
+        if body.hours
+        else "{}",
     }
 
 
@@ -210,8 +218,9 @@ async def create_location(
         await conn.execute(
             text(
                 "INSERT INTO location (id, tenant_id, business_id, name, address, geom, radius_m, timezone,"
-                " price_level, capacity, curfew, excluded_genres, show_nights)"
-                f" VALUES (:i, :t, :b, :n, :a, {_GEOM}, :r, :tz, :pl, :cap, :cf, :eg, CAST(:sn AS smallint[]))"
+                " price_level, capacity, curfew, excluded_genres, show_nights, hours)"
+                f" VALUES (:i, :t, :b, :n, :a, {_GEOM}, :r, :tz, :pl, :cap, :cf, :eg, CAST(:sn AS smallint[]),"
+                " CAST(:hr AS jsonb))"
             ),
             {**_location_params(body), "i": new_id, "t": access.tenant_id, "b": business_id},
         )
@@ -233,7 +242,7 @@ async def update_location(
             text(
                 f"UPDATE location SET name = :n, address = :a, geom = {_GEOM}, radius_m = :r, timezone = :tz,"
                 " price_level = :pl, capacity = :cap, curfew = :cf, excluded_genres = :eg,"
-                " show_nights = CAST(:sn AS smallint[]) WHERE id = :i"
+                " show_nights = CAST(:sn AS smallint[]), hours = CAST(:hr AS jsonb) WHERE id = :i"
             ),
             {**_location_params(body), "i": location_id},
         )
