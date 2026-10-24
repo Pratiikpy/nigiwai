@@ -19,6 +19,11 @@ setup:
 migrate:
     NIGIWAI_DATABASE_URL_SYNC=postgresql+psycopg://nigiwai:nigiwai-dev-only@127.0.0.1:55432/nigiwai uv run alembic -c db/alembic.ini upgrade head
 
+# Build the three public demo venues (judge mode) from public lineups and Qloo. Needs a Qloo key and the network;
+# a few minutes the first time, seconds after. `just demo empty-bottle` builds one.
+demo *venue:
+    uv run python -m nigiwai_api.demo {{venue}}
+
 # Run the API on :8000 (set NIGIWAI_QLOO_KEY_FILE or QLOO_API_KEY to enable live Qloo search).
 dev-api:
     uv run uvicorn nigiwai_api.app:create_app --factory --reload --host 127.0.0.1 --port 8000
@@ -33,7 +38,7 @@ lint:
     pnpm --filter @nigiwai/web lint
 
 typecheck:
-    uv run mypy packages/qloo-guard/src packages/tribes/src apps/api/src
+    uv run mypy packages/qloo-guard/src packages/tribes/src packages/fit/src apps/api/src
     pnpm --filter @nigiwai/web typecheck
 
 # Unit tests only: no Docker, no network, no Qloo calls.

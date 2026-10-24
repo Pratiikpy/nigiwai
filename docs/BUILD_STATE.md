@@ -1,6 +1,6 @@
 # Build state
 
-Last updated: 2026-10-24. Read this first after any context reset.
+Last updated: 2026-10-24 (Phase 3 and 3b). Read this first after any context reset.
 
 ## What this is
 Nigiwai (賑わい): a crowd-reading tool for venues; hero flow Soundcheck. Specs live in the research folder `../qloo` (the research folder next to this repo) (PRD.md v0.6, ARCHITECTURE.md with section 14, design/, BUILD_BRIEF.md). This repo is the product. Rules: no push, no public deploy, no accounts, MIT, decisions in docs/DECISIONS.md, human questions in docs/HUMAN.md.
@@ -17,8 +17,8 @@ Nigiwai (賑わい): a crowd-reading tool for venues; hero flow Soundcheck. Spec
 | 0 | Repo, tooling, docs | DONE (commit 1) |
 | 1 foundation | M21 Qloo Guard, M14 platform, M3 picker, M2 survey and QR | DONE for what is listed under Test evidence; open items below (real-phone timing, 429 onset, places as picks, CI not yet run) |
 | 2 tribes, public start, card | M4, M7, M13, M15, M24 | DONE for what is listed under Phase 2 evidence; open items below (real-QR-pick stability, real-guest timing, M7 accuracy) |
-| 3 map-first hero flow | M6, M19 Soundcheck, M9 acts, M23 panel, M22 Brief | NOT STARTED |
-| 3b trust and submission | M25 | NOT STARTED |
+| 3 map-first hero flow | M6, M19 Soundcheck, M9 acts, M23 panel, M22 Brief | DONE for what is listed under Phase 3 evidence; open items below (score weights not calibrated, the AI side of M23 never run against a real model) |
+| 3b trust and submission | M25 | DONE for what is listed under Phase 3 evidence: Evidence, Privacy and Business case pages, waitlist, feedback, judge mode (front door, `/try`, three live demo venues) and the submission write-up ([SUBMISSION.md](SUBMISSION.md)). Open: Qloo terms for showing its output publicly (H8, H9) |
 | 4 Today and chat | M5, M12, M8, M26 | NOT STARTED |
 | 5 onboarding | M1 | NOT STARTED |
 | 6 moves and ads | M10, M11 | NOT STARTED |
@@ -50,6 +50,16 @@ Nigiwai (賑わい): a crowd-reading tool for venues; hero flow Soundcheck. Spec
 - **Proof panel:** invented items shown to the owner: 0 of N (every item must exist in what Qloo returned; a corrupted stored result is reported as invented in a test). Guest-made calls are counted by purpose and never listed.
 - Bugs found by the Phase 2 tests and fixed: a refit with unchanged input stored a duplicate version; the related-tastes request put the signal in the exclusions; places near a central London point were landmarks until the category followed the business type; Qloo silently ignores a seed it does not know and answers with popular items, so a dropped seed now makes that card section unavailable; a stale cache survived test runs; a phone nav-drawer race in the browser tests.
 
+## Phase 3 and 3b evidence (2026-10-24)
+- **Checks.** ruff, eslint, mypy --strict (73 files) and tsc clean. Unit tests: 147 passed (Guard, tribes, fit) and 12 web. Integration (API against real Postgres and Redis with a scripted Qloo, database rebuilt from the migrations): 233 passed in the last complete run, and its one failure (a test counting tenants did not expect the demo tenant) was fixed and that file re-run green together with `test_demo.py` (42 passed). The last full `just check` was cut short by a unit test that could not start a subprocess (below); it passes alone. **The integration suite has not been run in one piece on the final tree.**
+- **Machine pressure, said plainly.** This computer sits at its commit limit (about 39.4 of 39.9 GB) because of roughly 180 node processes started by other tools. In this phase that produced `MemoryError`, argon2 "Memory allocation error", "can't start new thread", `ERR_INSUFFICIENT_RESOURCES` in Chrome and a crashed test worker (exit 0xC0000409), always in a different test, and every one of them passed when run again alone. They are not a product defect, but they mean a green run here is sometimes only a green re-run.
+- **Browser tests in real Chrome, phone and desktop.** One full run: 41 passed, 8 skipped (the opt-in live specs), 3 failed on desktop. One failure was a bad assertion (it counted sessions created by other tests; now compares before and after), two were the resource errors above. All three pass when run alone, and each spec has passed on both profiles.
+- **Judge mode, real data.** `python -m nigiwai_api.demo` built three venues from real MusicBrainz and real Qloo: Mercury Lounge (33 events, 89 of 120 performers matched; first build 98 s), Empty Bottle (30 events, 31 of 71), The Hideout (11 events, 37 of 53, just over the minimum of 10). The stored endpoints answer in under 160 ms.
+- **Do the scores separate fits from misfits? Observed once, not proven.** Ten real acts checked against Mercury Lounge through the public API: Bach 2, Metallica 3, Beyonce 4, Miles Davis 5, Taylor Swift 6, Radiohead 14, Pavement 50, Fugazi 53, against 89 to 95 for the acts suggested from the room's own groups. One venue, one run, no outcome data: this shows the number moves with the crowd, not that it predicts who will enjoy an act. The weights are still `v0`, uncalibrated.
+- **Live Soundcheck through the whole stack** (`apps/api/tests/live`): 6 of 6 passed against real Qloo with real crowds built from genuine survey picks.
+- **Looked at, not only asserted.** Screenshots of the front door, `/try`, a demo venue's Soundcheck, map and brief, in light and dark, on a phone and a desktop profile; axe clean and zero console errors on each (map tiles from OpenFreeMap are tolerated if blocked).
+- **Bugs found by this phase's tests and fixed (not exhaustive):** the waitlist insert needed SELECT on its conflict column, which the application role must not have; a stored check that the current suggestions point at was deleted by the clean-up of old checks; MusicBrainz holds a Mercury Lounge with longitude -457, and the real record names the area "Lower East Side" with the city only in the address; a failed rebuild cleared the stored lineup and suggestions; the map view rewrote the whole address and dropped the demo page's tab; the survey picker's "choose something else you love" reached an owner; a heading level skipped on `/try`.
+
 ## Open items and limits
 - **NOT VERIFIED: speed with real people.** The PRD target (a real phone, median 20 s, five phones) cannot be measured here. The scripted run completes in a few seconds, which says nothing about people. Copy says no time claim.
 - **NOT VERIFIED: the 429 onset and concurrent scanners.** No load test against live Qloo has been run; the Guard keeps to 8 requests per second by design and the picker is capped at 20 live searches per sitting.
@@ -67,3 +77,9 @@ Nigiwai (賑わい): a crowd-reading tool for venues; hero flow Soundcheck. Spec
 - **NOT VERIFIED: the rate limits** (20 card fill-ins an hour per address, and 40 responses per QR code in ten minutes before new ones are held for review) against a real busy venue; both are choices. One address behind a shared Wi-Fi counts as one.
 - **Taste Card:** the richer version (P1) is not built; places as picks are not built (above).
 - Lineup start covers music venues in MusicBrainz only; other venue types get "not enough public data yet". MusicBrainz asks for a contact: set `NIGIWAI_LINEUP_CONTACT` before public use (HUMAN H6).
+- **NOT VERIFIED: a demo venue rebuilt twice gives the same suggestions.** Mercury Lounge's top three changed between two builds from the same 89 matched acts (D18).
+- **NOT VERIFIED: the Fit score predicts anything about a crowd's enjoyment.** The weights are a starting design; there is no outcome data (`docs/SUBMISSION.md`, section 6).
+- **NOT VERIFIED: the AI-alone panel against a real model** (HUMAN H1). Without a key the panel says there is no AI answer.
+- **Demo copy says "your crowd"** inside a venue that is not the visitor's; the verdict text comes from the Fit package and was not reworded for the demo.
+- **"Search any venue" on the front door is not built** (the prototype has it); the owner's public-lineup start does the same after sign-up.
+- **Not started:** Phase 4 to 7 (Today, Ask Nigiwai, Grow, Sound plan, onboarding, moves and ads, network, atlas, autopilot), and the CI workflow has still never run.

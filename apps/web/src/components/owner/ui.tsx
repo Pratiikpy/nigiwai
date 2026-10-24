@@ -20,10 +20,10 @@ export function Loading({ label = "Loading…" }: { label?: string }) {
   );
 }
 
-export function PageHead({ title, lead, children }: { title: string; lead?: string; children?: React.ReactNode }) {
+export function PageHead({ title, lead, children, as: Tag = "h1" }: { title: string; lead?: string; children?: React.ReactNode; as?: "h1" | "h2" }) {
   return (
     <div className="page-h">
-      <h1 className="display">{title}</h1>
+      <Tag className="display">{title}</Tag>
       {lead ? <p className="muted">{lead}</p> : null}
       {children}
     </div>

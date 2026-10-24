@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "updated": "2026-10-24",
+  "stored_per_answer": [
+    { "what": "About five favourite things, chosen from a list (a kind and an identifier each, in the order chosen)", "table": "pick", "columns": ["entity_id", "entity_type", "position"] },
+    { "what": "Optionally: an age range", "table": "response", "columns": ["age_band"] },
+    { "what": "Optionally: a district, as a short place name", "table": "response", "columns": ["district"] },
+    { "what": "Optionally: a budget level from 1 to 4", "table": "response", "columns": ["budget"] },
+    { "what": "Which poster was scanned, and the venue's survey it belongs to", "table": "response", "columns": ["qr_point_id", "survey_id", "survey_version"] },
+    { "what": "The day, weekday and hour of the answer in the venue's own time (never the exact moment)", "table": "response", "columns": ["local_date", "local_weekday", "local_hour"] },
+    { "what": "Which version of the consent text was shown", "table": "response", "columns": ["consent_text_version"] },
+    { "what": "A quality flag: answers sent implausibly fast, or in a sudden burst at one poster, are held for review", "table": "response", "columns": ["quality_flag"] },
+    { "what": "The receipt code, kept only as a one-way hash, so a guest can delete their own answers", "table": "response", "columns": ["delete_token_hash"] },
+    { "what": "Which venue account the answer belongs to, and a random identifier for the answer itself", "table": "response", "columns": ["id", "tenant_id"] }
+  ],
+  "pick_internal": ["response_id", "tenant_id"],
+  "never": [
+    "Names, email addresses, phone numbers or device identifiers.",
+    "The phone's location, or the guest's IP address, browser or exact time of answering.",
+    "Health, finances, politics or anything else sensitive.",
+    "Free text from a guest beyond a short district name."
+  ],
+  "rules": [
+    "Groups under 10 people are never shown to an owner. A place or neighbourhood with fewer than 10 guests behind it is only a pin or a count.",
+    "Qloo results describe aggregate taste. They are never used to infer anything about a person.",
+    "Wording is about groups: “people who picked similar things also like”, never a prediction about you.",
+    "Qloo's facts are shown separately from our own interpretation, labelled measured, observed or modelled.",
+    "A guest can delete their own answers at any time with the receipt code. An owner can delete their account and its data.",
+    "The Qloo key stays on our server. What reaches Qloo from a guest is the words typed in the search box and the item chosen, with nothing that links them to the guest's answers; Qloo may keep and reuse them under its own terms, and the consent text says so.",
+    "A venue's own details (its name's kind, its position on the map) are sent to Qloo to find what is around it. They describe a business, not a person."
+  ]
+}

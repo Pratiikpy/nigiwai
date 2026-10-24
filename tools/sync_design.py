@@ -15,7 +15,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CSS_OUT = ROOT / "apps/web/src/design"
 FONT_OUT = ROOT / "apps/web/public/fonts"
-DEFAULT_CSS = ["tokens.css", "base.css", "components.css", "directions.css", "survey.css"]
+DEFAULT_CSS = [
+    "tokens.css",
+    "base.css",
+    "components.css",
+    "directions.css",
+    "survey.css",
+    "trace.css",
+    "map.css",
+    "v06.css",
+]
 FONTS = ["bricolage-normal-300-800.woff2", "dmmono-normal-400.woff2", "dmmono-normal-500.woff2"]
 
 FONTS_CSS = """/* Direction A fonts, self-hosted (SIL Open Font License 1.1; see NOTICE.md). Latin subset. */

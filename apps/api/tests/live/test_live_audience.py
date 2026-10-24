@@ -6,13 +6,13 @@ and L used, so a pass shows the direction is right, not that the numbers are acc
 from __future__ import annotations
 
 import os
-import random
 import uuid
 from typing import Any
 
 import psycopg
 import pytest
 from harness import WorldFactory, make_venue, sign_up
+from live.real_crowd import CROWDS, plant, resolve
 from nigiwai_api.services import tribes as service
 from nigiwai_tribes import TribesConfig
 
@@ -20,38 +20,6 @@ pytestmark = pytest.mark.skipif(
     os.environ.get("NIGIWAI_RUN_LIVE") != "1", reason="set NIGIWAI_RUN_LIVE=1 to spend quota"
 )
 
-CROWDS = {
-    "pop": [
-        "Dua Lipa",
-        "Olivia Rodrigo",
-        "Billie Eilish",
-        "Sabrina Carpenter",
-        "Charli XCX",
-        "Gracie Abrams",
-        "Doja Cat",
-        "Taylor Swift",
-    ],
-    "crooners": [
-        "Frank Sinatra",
-        "Bing Crosby",
-        "Dean Martin",
-        "Tony Bennett",
-        "Nat King Cole",
-        "Perry Como",
-        "Ella Fitzgerald",
-        "Louis Armstrong",
-    ],
-    "metal": [
-        "Metallica",
-        "Iron Maiden",
-        "Slayer",
-        "Pantera",
-        "Black Sabbath",
-        "Judas Priest",
-        "Motorhead",
-        "Megadeth",
-    ],
-}
 EXPECTED = {"pop": ("younger", "women"), "crooners": ("older", None), "metal": ("older", "men")}
 
 
@@ -68,71 +36,10 @@ async def test_live_audience_reading_follows_the_crowd(
         assert state.guard is not None, "no Qloo key available"
         owner = await sign_up(world)
         venue = await make_venue(owner)
-        ids: dict[str, list[str]] = {name: [] for name in CROWDS}
-        for crowd, acts in CROWDS.items():
-            guest = (
-                world.client()
-            )  # a sitting may make 20 live searches, so each crowd gets its own
-            guest.headers["x-forwarded-for"] = (
-                f"10.8.0.{len(ids[crowd]) + list(CROWDS).index(crowd) + 1}"
-            )
-            page = (await guest.get(f"/v1/public/survey/{venue.token}")).json()
-            for act in acts:
-                found = (
-                    await guest.post(
-                        "/v1/public/picker",
-                        json={
-                            "token": venue.token,
-                            "nonce": page["nonce"],
-                            "q": act,
-                            "type": "artist",
-                        },
-                    )
-                ).json()
-                if not found["items"] or found["items"][0]["name"].lower() != act.lower():
-                    print("not matched exactly:", act, [i["name"] for i in found["items"][:2]])
-                    continue
-                top = found["items"][0]
-                sel = await guest.post(
-                    "/v1/public/select",
-                    json={
-                        "token": venue.token,
-                        "nonce": page["nonce"],
-                        "entity_id": top["entity_id"],
-                    },
-                )
-                if sel.json()["eligible"]:
-                    ids[crowd].append(top["entity_id"])
+        ids = await resolve(world, venue, CROWDS)
         print({k: len(v) for k, v in ids.items()})
         assert all(len(v) >= 6 for v in ids.values())
-
-        # The survey endpoints are exercised by the other live tests; here the responses go in through the same database
-        # function, because one QR point holds back responses beyond 40 in ten minutes (a rule the survey rightly has).
-        rng = random.Random(7)
-        names: dict[str, str] = {}
-        survey = admin.execute(
-            "SELECT id, version FROM survey WHERE business_id = %s AND status = 'published'",
-            (venue.business_id,),
-        ).fetchone()
-        assert survey is not None
-        for n in range(75):
-            crowd = list(CROWDS)[n % 3]
-            picks = rng.sample(ids[crowd], 4)
-            admin.execute(
-                "SELECT public_insert_response(%s, %s, %s, 'v1', NULL, NULL, NULL, 'ok', %s, %s, %s)",
-                (
-                    venue.qr["id"],
-                    survey[0],
-                    survey[1],
-                    picks,
-                    ["urn:entity:artist"] * len(picks),
-                    uuid.uuid4().bytes,
-                ),
-            )
-            names.update({e: crowd for e in picks})
-        admin.execute(
-            "UPDATE response SET local_weekday = (random() * 6)::int, local_hour = (random() * 23)::int"
-        )
+        names = plant(admin, venue, ids, n=75)
 
         await service.recompute(
             state.engine,

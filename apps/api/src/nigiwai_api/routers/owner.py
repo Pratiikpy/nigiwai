@@ -634,7 +634,7 @@ async def get_lineup(business_id: UUID, state: State, access: Tenant) -> dict[st
         "place": {"mbid": row.place_mbid, "name": row.place_name, "area": row.place_area},
         "status": row.status,
         "progress": row.progress,
-        "result": row.result,
+        "result": lineup_service.owner_view(row.result),
         "error": row.error,
         "requested_at": row.created_at.isoformat(),
         "finished_at": row.finished_at.isoformat() if row.finished_at else None,

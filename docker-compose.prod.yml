@@ -61,6 +61,8 @@ services:
       NIGIWAI_PUBLIC_BASE_URL: ${NIGIWAI_PUBLIC_BASE_URL:?set NIGIWAI_PUBLIC_BASE_URL (https://your-domain)}
       NIGIWAI_CORS_ORIGINS: '["${NIGIWAI_PUBLIC_BASE_URL}"]'
       QLOO_API_KEY: ${QLOO_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      NIGIWAI_LINEUP_CONTACT: ${NIGIWAI_LINEUP_CONTACT:?set NIGIWAI_LINEUP_CONTACT (a URL or email that identifies you to MusicBrainz and Nominatim)}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -84,6 +86,7 @@ services:
       NIGIWAI_EMBEDDED_WORKER: "false"
       NIGIWAI_PUBLIC_BASE_URL: ${NIGIWAI_PUBLIC_BASE_URL:?set NIGIWAI_PUBLIC_BASE_URL (https://your-domain)}
       QLOO_API_KEY: ${QLOO_API_KEY:-}
+      NIGIWAI_LINEUP_CONTACT: ${NIGIWAI_LINEUP_CONTACT:?set NIGIWAI_LINEUP_CONTACT (a URL or email that identifies you to MusicBrainz and Nominatim)}
     depends_on:
       migrate:
         condition: service_completed_successfully

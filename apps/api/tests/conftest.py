@@ -65,7 +65,12 @@ def admin(database: None) -> Iterator[psycopg.Connection[Any]]:
     with admin_connect() as conn:
         conn.execute(
             "TRUNCATE app_user, tenant, qloo_entity, qloo_response, trace, qloo_call, quota_ledger, external_cache,"
+            " llm_cache, waitlist, feedback,"
             " audit_log CASCADE"
+        )
+        # The migration creates the demo tenant; truncating tenants removed it, so put it back as a migrated database has it.
+        conn.execute(
+            "INSERT INTO tenant (id, name) VALUES ('6e1c0de0-0000-4000-8000-00000000d3a0', 'Nigiwai demo venues')"
         )
         yield conn
 

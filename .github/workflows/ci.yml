@@ -37,7 +37,7 @@ jobs:
         run: |
           uv run ruff check .
           uv run ruff format --check .
-          uv run mypy packages/qloo-guard/src packages/tribes/src apps/api/src
+          uv run mypy packages/qloo-guard/src packages/tribes/src packages/fit/src apps/api/src
           pnpm --filter @nigiwai/web lint
           pnpm --filter @nigiwai/web typecheck
           uv run pytest -m "not live"

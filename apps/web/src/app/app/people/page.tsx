@@ -395,29 +395,29 @@ function HowComputed({ data }: { data: TribesPayload }) {
             <div>
               <dt>Stability of these groups</dt>
               <dd>{s.raw.toFixed(2)}</dd>
-              <p className="parts__why">
+              <dd className="parts__why">
                 How often refitting on a resampled crowd puts the same guests together (1 is perfect). Resampled {s.bootstrap} times.
-              </p>
+              </dd>
             </div>
             <div>
               <dt>Same crowd with its tags shuffled</dt>
               <dd>{s.null_permuted.toFixed(2)}</dd>
-              <p className="parts__why">Structure destroyed. The real crowd beat {s.null_runs - Math.round((s.p_permuted * (s.null_runs + 1)) - 1)} of {s.null_runs} such draws.</p>
+              <dd className="parts__why">Structure destroyed. The real crowd beat {s.null_runs - Math.round((s.p_permuted * (s.null_runs + 1)) - 1)} of {s.null_runs} such draws.</dd>
             </div>
             <div>
               <dt>Same number of random popular picks</dt>
               <dd>{s.null_random_picks.toFixed(2)}</dd>
-              <p className="parts__why">Popularity without taste. The real crowd beat {s.null_runs - Math.round((s.p_random_picks * (s.null_runs + 1)) - 1)} of {s.null_runs} such draws.</p>
+              <dd className="parts__why">Popularity without taste. The real crowd beat {s.null_runs - Math.round((s.p_random_picks * (s.null_runs + 1)) - 1)} of {s.null_runs} such draws.</dd>
             </div>
             <div>
               <dt>Stability beyond chance</dt>
               <dd>{s.corrected.toFixed(2)}</dd>
-              <p className="parts__why">The stability above minus the larger of the two shuffled versions.</p>
+              <dd className="parts__why">The stability above minus the larger of the two shuffled versions.</dd>
             </div>
             <div>
               <dt>Groups shown only if they beat both</dt>
               <dd>{s.beats_both_nulls ? "yes" : "no"}</dd>
-              <p className="parts__why">One-sided p-values {s.p_permuted.toFixed(2)} and {s.p_random_picks.toFixed(2)}, shown if both are at most 0.05.</p>
+              <dd className="parts__why">One-sided p-values {s.p_permuted.toFixed(2)} and {s.p_random_picks.toFixed(2)}, shown if both are at most 0.05.</dd>
             </div>
           </dl>
         ) : null}

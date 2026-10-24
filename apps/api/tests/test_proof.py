@@ -70,7 +70,11 @@ async def test_tribe_calls_are_listed_with_their_rules_and_the_account_is_privat
         artist(
             f"Item {i}",
             entity_id=e,
-            tags=[(f"urn:tag:genre:qloo:t{i // 24}_{k}", f"F{k}") for k in range(4)],
+            # four of the group's fourteen tags, a different four for each item, so the groups are real structure
+            # and not forty identical rows (which the stability test rightly refuses to call groups)
+            tags=[
+                (f"urn:tag:genre:qloo:t{i // 24}_{(i * 5 + k * 3) % 14}", f"F{k}") for k in range(4)
+            ],
         )
         for i, e in enumerate(ids)
     ]

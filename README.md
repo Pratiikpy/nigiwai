@@ -6,12 +6,17 @@ Status: work in progress. [docs/BUILD_STATE.md](docs/BUILD_STATE.md) says exactl
 
 ## What works today
 
+- **Try it without an account** (`/` and `/try`): three real venues (Mercury Lounge in New York, The Hideout and Empty Bottle in Chicago), each read from the public lineups of its past events and matched to Qloo. Anyone can open one, check any act against it, see the crowd map and download the Booking Brief. Scores there are provisional and say so; checking a new act calls Qloo, so each network and the whole site have daily limits.
 - **Guest survey** (`/s/<token>`): consent notice, a type-ahead picker backed by a local index and live Qloo search, optional age band, area and budget, a receipt code, and removal of your own answers.
 - **Owner app** (`/app`): sign up, describe the venue, configure and publish a survey, create QR codes, download an A4 poster or A6 table card.
 - **Taste Card**: after sending, a guest gets a card from their own picks at once, and a few related tastes and places near the venue a moment later (at most three Qloo calls). Shareable as an image.
 - **My people** (`/app/people`): once 60 guests have answered, soft groups ("tribes") with their tags, most-picked items, weekday and hour rhythm, unusual pairings and a coarse age and gender lean from Qloo's audience data. Names unlock at 200 guests. A group is shown only if the crowd is more stable than two shuffled versions of itself; every figure carries a measured, observed or modelled label, and "How this was computed" is on the page.
 - **Public-lineup start**: a venue with no guests yet can pick itself in MusicBrainz (public domain) and see who has played there, matched to Qloo by exact id or name.
 - **Proof** (`/app/proof`): every Qloo call made for the owner, what was sent and what came back, usage by purpose, and a check that nothing shown is missing from what Qloo returned.
+- **Soundcheck** (`/app/soundcheck`): pick any act and see how well it fits your crowd, 0 to 100, with the likely range, how it ranks for each group, why, what to watch, the nights it suits, and the working. The score is computed in code from what Qloo says about each group (one call per group); the formula, the weights and every Qloo call behind it are on the page. It works from your own guests, or provisionally from public lineups. Suggested acts and a Wildcard are built for your crowd.
+- **Qloo against an AI alone**: beside every Soundcheck, the same question put to Qloo and to a language model with no tools. It marks which acts are real Qloo entities, counts agreement without ranking either side, and says so when a model does not know an act (needs a model key; without one it says there is no AI answer).
+- **Booking Brief** (`/app/brief`): one page for a booker or partner: your crowd, three acts with scores and per-group fit, a Wildcard, the best nights. Save it as a one-page PDF or make a share link that expires in 30 days and can be turned off. Names and our own scores only.
+- **Crowd map** (`/app/map`): your sites on a real map with how many guests scanned and who they are, hexagons for the neighbourhoods guests say they come from, and what Qloo says is around. A site or neighbourhood with fewer than 10 guests is only a pin or a count. Choose the period, turn layers on and off, and copy a link that reopens the view.
 - **Qloo Guard** (`packages/qloo-guard`): every Qloo call goes through typed requests, rule checks, a private cache, a rate limiter, a monthly budget and a trace.
 - **Privacy by construction**: no IP address, user agent or exact time is stored with an answer; every tenant table is protected by row-level security that the application role cannot bypass.
 
@@ -29,6 +34,8 @@ just dev-web        # web app on http://localhost:3000   (second terminal)
 
 Open http://localhost:3000, create an account, set up the venue, publish the survey and create a QR code. Open the survey link it shows, or scan the QR code from the poster.
 
+**The demo venues.** The front page and `/try` list the demo venues once they are built: `just demo` (needs a Qloo key and the network; MusicBrainz is asked politely, one request a second). Until then they say the venues are being prepared. A weekly job rebuilds them; a rebuild that fails leaves the venue showing what it showed.
+
 **Qloo search.** Without a key the picker serves only items it already knows. To enable live search, save your key as `QLOO_API_KEY=...` in a file kept outside the repository and start the API with `NIGIWAI_QLOO_KEY_FILE=<that file>`. The key is read on the server only and is never sent to a browser.
 
 ## Tests
@@ -43,15 +50,16 @@ just check              # lint, types, unit and integration tests
 
 ## Deploy
 
-`docker-compose.prod.yml` runs Postgres, Redis, a one-shot migration, the API and the web app. Copy `.env.prod.example` to `.env.prod`, fill it in and run `docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build`. Put a TLS-terminating reverse proxy in front of the web port that **overwrites** `X-Forwarded-For`; the API trusts that header for rate limiting. Migrations run as the table-owner role and the API as a separate non-owner role, and the API refuses to start if it is connected as a role that would bypass row-level security.
+`docker-compose.prod.yml` runs Postgres, Redis, a one-shot migration, the API and the web app. Copy `.env.prod.example` to `.env.prod`, fill it in and run `docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build`. Put a TLS-terminating reverse proxy in front of the web port that **overwrites** `X-Forwarded-For`; the API trusts that header for rate limiting. Migrations run as the table-owner role and the API as a separate non-owner role, and the API refuses to start if it is connected as a role that would bypass row-level security. Build the demo venues once with `docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm worker python -m nigiwai_api.demo`; the worker service then refreshes them weekly.
 
 ## Layout
 
 | Path | What |
 |---|---|
 | `packages/qloo-guard` | The only code that talks to Qloo |
-| `packages/tribes` | The group model: tags, soft factors, stability tests, naming, rhythm |
-| `apps/api` | FastAPI service: accounts, tenancy, picker, survey, posters, groups, card, lineups, background jobs |
+| `packages/tribes` | The group model: tags, soft factors, stability tests, naming, rhythm, scenes from lineups |
+| `packages/fit` | The Fit Verdict: a reproducible 0 to 100 score from visible components |
+| `apps/api` | FastAPI service: accounts, tenancy, picker, survey, posters, groups, card, lineups, Soundcheck, brief, map, background jobs |
 | `apps/web` | Next.js app: guest survey and owner screens |
 | `db` | Alembic migrations (plain SQL) |
 | `docs` | Decisions, build state, open questions |

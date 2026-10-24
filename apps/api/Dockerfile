@@ -8,6 +8,10 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 COPY packages/qloo-guard/pyproject.toml packages/qloo-guard/README.md packages/qloo-guard/
 COPY packages/qloo-guard/src packages/qloo-guard/src
+COPY packages/tribes/pyproject.toml packages/tribes/README.md packages/tribes/
+COPY packages/tribes/src packages/tribes/src
+COPY packages/fit/pyproject.toml packages/fit/README.md packages/fit/
+COPY packages/fit/src packages/fit/src
 COPY apps/api/pyproject.toml apps/api/
 COPY apps/api/src apps/api/src
 RUN uv sync --frozen --no-dev --package nigiwai-api

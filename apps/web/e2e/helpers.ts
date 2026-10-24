@@ -210,7 +210,7 @@ export async function plantRealCrowds(
   for (let i = 0; i < n; i++) {
     const group = crowds[i % crowds.length]!;
     const chosen: { id: string; urn: string }[] = [];
-    while (chosen.length < 4) {
+    while (chosen.length < 5) {
       const pick = group[Math.floor(r() * group.length)]!;
       if (!chosen.includes(pick)) chosen.push(pick);
     }
@@ -226,5 +226,52 @@ export async function plantRealCrowds(
   await sql(
     "UPDATE response SET local_weekday = floor(random() * 7)::int, local_hour = floor(random() * 24)::int WHERE qr_point_id = $1",
     [qrId],
+  );
+}
+
+/** An artist Qloo "knows" for the tests that must not call Qloo: stored with its tags, so Soundcheck can load it. */
+export async function plantArtist(name: string, genres: string[]): Promise<string> {
+  const id = randomUUID();
+  const tags = genres.map((g) => [`urn:tag:genre:qloo:${g.toLowerCase().replace(/\W+/g, "_")}`, g, "urn:tag:genre:qloo"]);
+  await sql(
+    "INSERT INTO qloo_entity (entity_id, type, types, name_nfc, tags, popularity, insights_eligible) VALUES ($1, 'urn:entity:artist', ARRAY['urn:entity:artist'], $2, $3::jsonb, 0.2, true)",
+    [id, name, JSON.stringify(tags)],
+  );
+  return id;
+}
+
+/** A ready public-lineup profile whose acts are three genre scenes, stored with their tags (no Qloo call involved). */
+export async function plantLineup(tenantId: string, businessId: string, opts: { events: number; place?: string }): Promise<void> {
+  const scenes = [
+    ["Indie rock", "Post-punk", "Shoegaze", "Garage rock", "Lo-fi"],
+    ["Jazz", "Bebop", "Swing", "Big band", "Cool jazz"],
+    ["Techno", "House", "Ambient", "Minimal", "Electro"],
+  ];
+  const tag = Date.now().toString(36);
+  const acts: unknown[] = [];
+  for (let g = 0; g < scenes.length; g++) {
+    for (let i = 0; i < 9; i++) {
+      const id = randomUUID();
+      const tags = [0, 1, 2].map((k) => {
+        const name = scenes[g]![(i + k) % 5]!;
+        return [`urn:tag:genre:qloo:${name.toLowerCase().replace(/\W+/g, "_")}`, name, "urn:tag:genre:qloo"];
+      });
+      await sql(
+        "INSERT INTO qloo_entity (entity_id, type, types, name_nfc, tags, insights_eligible) VALUES ($1, 'urn:entity:artist', ARRAY['urn:entity:artist'], $2, $3::jsonb, true)",
+        [id, `Scene ${g} Act ${i} ${tag}`, JSON.stringify(tags)],
+      );
+      acts.push({ entity_id: id, name: `Scene ${g} Act ${i} ${tag}`, mbid: randomUUID(), events: 2 + (i % 5) + (g === 0 ? 6 : 0), tags });
+    }
+  }
+  const doc = {
+    state: "profile",
+    events: { used: opts.events, with_lineup: opts.events },
+    performers: { unique: acts.length + 5, resolved: acts.length },
+    weekdays: [0, 0, 1, 2, 12, 20, 5],
+    acts,
+  };
+  await sql(
+    "INSERT INTO lineup_profile (tenant_id, business_id, place_mbid, place_name, status, result, finished_at) VALUES ($1, $2, $3, $4, 'ready', $5::jsonb, now())",
+    [tenantId, businessId, randomUUID(), opts.place ?? "Mercury Test Room", JSON.stringify(doc)],
   );
 }

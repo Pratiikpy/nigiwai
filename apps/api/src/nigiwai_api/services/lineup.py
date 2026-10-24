@@ -17,7 +17,7 @@ import time
 import unicodedata
 from collections import Counter
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -44,6 +44,7 @@ CACHE_TTL = timedelta(days=7)
 MIN_EVENTS = 10  # below this the view says there is not enough public data yet
 MIN_RESOLVED_ACTS = 15
 GROUPS_FROM_EVENTS = 60  # the same bar as guests: events with two or more resolved acts
+MAX_STORED_ACTS = 300  # resolved acts kept with their tags, most-booked first
 PAGE = 100
 MAX_PAGES = 3
 SOURCE_LABEL = "Modelled from public lineups"
@@ -75,6 +76,8 @@ class PlaceHit:
     area: str | None
     address: str | None
     kind: str | None
+    lat: float | None = None
+    lon: float | None = None
 
 
 @dataclass
@@ -168,6 +171,20 @@ class MusicBrainz:
             if not p.get("id") or not p.get("name"):
                 continue
             area = (p.get("area") or {}).get("name")
+            coordinates = p.get("coordinates") or {}
+            lat: float | None
+            lon: float | None
+            try:
+                lat, lon = float(coordinates["latitude"]), float(coordinates["longitude"])
+            except (KeyError, TypeError, ValueError):
+                lat = lon = None
+            # MusicBrainz is hand-edited: it holds places with a longitude of -457. Out of range is no position at all.
+            if (
+                lat is not None
+                and lon is not None
+                and not (-90 <= lat <= 90 and -180 <= lon <= 180)
+            ):
+                lat = lon = None
             out.append(
                 PlaceHit(
                     p["id"],
@@ -175,6 +192,8 @@ class MusicBrainz:
                     area,
                     p.get("address"),
                     p.get("disambiguation") or p.get("type"),
+                    lat,
+                    lon,
                 )
             )
         return out
@@ -366,6 +385,26 @@ def build_profile(
             result = compute(respondents, gcfg)
             groups = public_view(result.to_dict())
 
+    # Every resolved act with its Qloo tags: the Soundcheck groups them into scenes and uses them as references.
+    acts = [
+        {
+            "entity_id": resolved[m][0],
+            "name": resolved[m][1],
+            "mbid": m,
+            "events": n,
+            "tags": [[t.tag_id, t.name, t.type] for t in resolved[m][2]],
+        }
+        for m, n in counts.most_common(MAX_STORED_ACTS)
+        if m in resolved
+    ]
+    weekdays = [0] * 7
+    for d in dated:
+        if len(d) == 10:  # a full date; partial dates (a year, a month) have no weekday
+            try:
+                weekdays[date.fromisoformat(d).weekday()] += 1
+            except ValueError:
+                continue
+
     return {
         "label": SOURCE_LABEL,
         "state": state,
@@ -388,10 +427,21 @@ def build_profile(
             "rate": round(len(acts_resolved) / unique, 3) if unique else 0.0,
         },
         "top_acts": top_acts,
+        "acts": acts,
+        "weekdays": weekdays,
         "top_tags": top_tags,
         "top_feel": top_feel,
         "groups": groups,
     }
+
+
+def owner_view(doc: dict[str, Any] | None) -> dict[str, Any] | None:
+    """What an owner's browser receives: the profile without the per-act tag lists, which only the server needs."""
+    if doc is None:
+        return None
+    out = {k: v for k, v in doc.items() if k != "acts"}
+    out["acts_stored"] = len(doc.get("acts") or [])
+    return out
 
 
 async def build(

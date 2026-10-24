@@ -1,0 +1,160 @@
+{
+  "version": 1,
+  "updated": "2026-10-24",
+  "intro": "These are our own tests of what Qloo adds, written before they ran and reported whichever way they came out. The short version: Qloo is not a better recommender than a strong language model, and we do not claim it is. It is good at a few specific things, and the product is built on those.",
+  "proofs": [
+    {
+      "id": "A",
+      "title": "Does Qloo predict what people will love, from what they already picked?",
+      "method": "Hid 30% of each person's picks from public listening and film data and asked each method to predict them: Qloo's graph, an AI alone, and plain popularity.",
+      "result": "Music, recall at 20: Qloo 0.157, popularity 0.061, an AI alone 0.186. Films: Qloo 0.050, popularity 0.083, an AI alone 0.066.",
+      "verdict": "tie",
+      "verdict_text": "Beats popularity on music; does not beat an AI alone; loses on films.",
+      "limits": "Public data from real people, but not our own guests. It changed the design: Qloo is not used as a recommender of last resort."
+    },
+    {
+      "id": "B",
+      "title": "Places: a fixed Qloo-then-AI pipeline against an AI alone",
+      "method": "Thirty New York questions; recommendations scored against what locals picked.",
+      "result": "In the requested area: 99.7% against 93.5%. Closed or not found: 1.3% against 7.3%. Agreeing with locals, precision at 10: 0.047 against 0.127.",
+      "verdict": "loss",
+      "verdict_text": "Stays in the area and avoids dead listings; worse at agreeing with locals.",
+      "limits": "Closure could not be measured independently, so the closure figure is not firm."
+    },
+    {
+      "id": "C",
+      "title": "Do Qloo's place filters do what they say?",
+      "method": "Radius, price and rating filters checked against what came back.",
+      "result": "All 239 results were inside the radius. Usable results 63.2% against 37.0% at the floor, and 89.5% against 81.7% at the ceiling.",
+      "verdict": "win",
+      "verdict_text": "Filters are honoured exactly.",
+      "limits": "Shows constraint compliance, not taste."
+    },
+    {
+      "id": "D",
+      "title": "Are crowd groups stable enough to show an owner?",
+      "method": "Soft groups from listening tags, refitted on resampled crowds, compared with shuffled versions of the same crowd.",
+      "result": "Stability rises with crowd size; groups are shown from 60 guests (provisional) and named from 200. Our product code reproduces the research figures within 0.004 on the same data.",
+      "verdict": "win",
+      "verdict_text": "Groups exist and repeat, at the sizes we say.",
+      "limits": "Stability, not usefulness: we have not shown that owners act on the groups. Real five-pick survey data is untested."
+    },
+    {
+      "id": "E",
+      "title": "The fixed pipeline again, on New York places",
+      "method": "Qloo bounds the candidates, an AI picks and explains.",
+      "result": "Precision at 10: 0.073 against 0.127 for an AI alone. Qloo's candidate pool held about 15% of what locals picked.",
+      "verdict": "loss",
+      "verdict_text": "A fixed pipeline did not beat an AI alone, so we dropped it.",
+      "limits": "This result is why Nigiwai is not built that way."
+    },
+    {
+      "id": "F",
+      "title": "A tool-using agent that runs Qloo calls itself and lists only venues Qloo returned",
+      "method": "Same thirty questions, preregistered; forty music users for the music test.",
+      "result": "Places: precision at 10 0.180 against 0.127, recall 0.250 against 0.168, every venue in the requested area. Music: tied the AI alone (recall at 20 within 0.002) and clearly beat popularity.",
+      "verdict": "win",
+      "verdict_text": "Beat an AI alone on places; tied on music.",
+      "limits": "Part of the gain is the multi-step, verify-before-listing design, not Qloo itself (see H). Single runs, same model family wrote the baseline."
+    },
+    {
+      "id": "G",
+      "title": "Are groups stable on Qloo's own tags?",
+      "method": "319 people, 767 Qloo calls, groups refitted on resampled crowds.",
+      "result": "Raw stability 0.649 at 200 people, 0.569 at 100 and 0.508 at 60: about the same as on listening tags.",
+      "verdict": "tie",
+      "verdict_text": "Qloo tags give stable groups, no better than a free tag source.",
+      "limits": "Stability only."
+    },
+    {
+      "id": "H",
+      "title": "Is Qloo what makes the agent good at places?",
+      "method": "The same agent and rules with a free OpenStreetMap tool instead of Qloo, same thirty questions.",
+      "result": "Precision at 10 0.167 against 0.180; recall 0.237 against 0.250. The differences were not distinguishable (the test could only detect gaps of about 0.06 to 0.09).",
+      "verdict": "tie",
+      "verdict_text": "On New York places, Qloo's own contribution to accuracy is not shown.",
+      "limits": "Absence of evidence, not proof of equivalence. We do not claim that Qloo drives place accuracy."
+    },
+    {
+      "id": "I",
+      "title": "Taste across categories: from music picks to book picks",
+      "method": "Thirty-three Reddit threads: picks in one category, predict picks in another.",
+      "result": "Precision at 10: the Qloo agent 0.038, an AI alone 0.107, a free-data agent 0.095.",
+      "verdict": "loss",
+      "verdict_text": "Clearly worse than an AI alone.",
+      "limits": "One kind of question. It is why Soundcheck uses artists as seeds for artists and never crosses categories."
+    },
+    {
+      "id": "J",
+      "title": "Hybrids: can Qloo improve an AI's list?",
+      "method": "Thirty-one fresh threads. Qloo as a re-ranker, as a filter, as a tag source.",
+      "result": "As a re-ranker, clearly worse than an AI alone (precision at 10 0.106 against 0.169); as a filter or tag source, no better. Qloo's affinity ranked the consensus items at chance (AUC 0.508).",
+      "verdict": "loss",
+      "verdict_text": "Qloo did not improve an AI's list.",
+      "limits": "On this task. Taste fit beyond famous items, cold start and real-user judgement are untested."
+    },
+    {
+      "id": "K+L",
+      "title": "Who is in a crowd: age and gender from Qloo's audience data",
+      "method": "Entities with common-knowledge audiences, directions fixed in advance; fresh entities in the second run.",
+      "result": "Gender direction right for 27 of 27. Younger against older separated at AUC 0.96 to 0.97 on a contrast measure. Three-item crowds told apart 400 of 400 times (from only 35 and 10 distinct triples).",
+      "verdict": "win",
+      "verdict_text": "A coarse age and gender reading is directionally right.",
+      "limits": "Ground truth is common knowledge, not a survey; accuracy is not verified. Shown as modelled."
+    },
+    {
+      "id": "L-fit",
+      "title": "Does an act score highest for the crowd it belongs to?",
+      "method": "Twenty acts scored against three seed crowds (pop, crooners, hard rock).",
+      "result": "The highest-scoring crowd was the expected one 20 of 20 times. In the product, on a real run: 6 of 6 acts fit their own crowd best.",
+      "verdict": "tie",
+      "verdict_text": "Works on distant crowds; an AI alone would likely match it on famous names.",
+      "limits": "Easy, genre-separated cases. Close cases and non-artist ideas are untested, and the score weights are not calibrated against outcomes."
+    },
+    {
+      "id": "M",
+      "title": "Does an audience filter change which places Qloo returns?",
+      "method": "Age and gender filters on place searches in five cities.",
+      "result": "No. All seven audience conditions returned the same twenty places in the same order, in all five cities.",
+      "verdict": "loss",
+      "verdict_text": "The filter has no effect, so the product does not offer it.",
+      "limits": "With no interest seed or audience id; those are untested."
+    },
+    {
+      "id": "N",
+      "title": "Obscure artists: does Qloo know what an AI does not?",
+      "method": "Twenty-seven obscure artists; does each tool know the act exists?",
+      "result": "Existence: Qloo 0.895, an AI alone 0.800, not significantly different. The AI said it did not know 4 of 27.",
+      "verdict": "open",
+      "verdict_text": "Not distinguishable on existence; relevance was not measured.",
+      "limits": "This is why the product shows both answers side by side and marks which acts are real Qloo entities, instead of claiming a win."
+    },
+    {
+      "id": "O",
+      "title": "Can public event lineups start a venue's crowd?",
+      "method": "Performers from MusicBrainz event records at three real venues, matched to Qloo by exact name.",
+      "result": "56% of sampled performers resolved exactly to a Qloo artist (69% at Mercury Lounge).",
+      "verdict": "win",
+      "verdict_text": "Enough to start from, never fuzzy-matched.",
+      "limits": "Smaller rooms book local acts Qloo does not know, so the view is partial; a near miss is usually a different artist, so none is accepted."
+    }
+  ],
+  "build": [
+    {
+      "title": "Taste Card call budget",
+      "result": "Two hundred synthetic scans through the real survey and card endpoints, live Qloo: a mean of 1.75 Qloo calls per card (maximum 3); the instant card answered in under 1.5 s every time; the fill-in took a median of 3.5 s.",
+      "verdict": "win"
+    },
+    {
+      "title": "Audience reading in the product, live",
+      "result": "Three real crowds went through the survey, the groups job and the audience step: younger-leaning and women, older-leaning and no clear lean, older-leaning and men: as common knowledge says. Three live calls.",
+      "verdict": "win"
+    },
+    {
+      "title": "Soundcheck in the product, live",
+      "result": "Three crowds of well-known artists, six acts with known audiences: each act fit its own crowd's group best (6 of 6, after fixing an act that was one of the crowd's own favourites).",
+      "verdict": "win"
+    }
+  ],
+  "reading": "What Qloo is measurably good for here: staying inside the area and honouring filters, exact entity identifiers so nothing is invented, and a taste graph that covers obscure acts. It is not shown to recommend better than a strong language model. That is why every Soundcheck shows an AI's answer beside Qloo's, and why the numbers that matter come from your own guests."
+}

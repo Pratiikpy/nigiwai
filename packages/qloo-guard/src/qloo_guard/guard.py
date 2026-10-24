@@ -655,6 +655,23 @@ class QlooGuard:
         )
         return eligible
 
+    async def ensure_eligible(
+        self, entity_ids: tuple[str, ...], ctx: CallContext
+    ) -> dict[str, bool | None]:
+        """Probe every known entity that has not been probed yet (trap 13), so it can be used as a signal. Entities the
+        registry has never seen are reported as None and are not probed. Returns each entity's eligibility."""
+        out: dict[str, bool | None] = {}
+        for entity_id in entity_ids:
+            entry = await self.registry.get(entity_id)
+            if entry is None:
+                out[entity_id] = None
+            elif entry.eligible is not None:
+                out[entity_id] = entry.eligible
+            else:
+                probe = Entity(entity_id=entity_id, name=entry.name or entity_id, types=entry.types)
+                out[entity_id] = await self.probe_eligibility(probe, ctx)
+        return out
+
 
 def _int_header(value: str | None) -> int | None:
     if value is None:

@@ -120,3 +120,136 @@ fieldset.card > legend + * { clear: both; }
 .disc > summary.row { cursor: pointer; list-style: none; min-height: var(--hit); align-items: center; }
 
 .tnear .tile .ic { display: none; }
+
+/* The Soundcheck verdict card is `.card.result` (v06.css). The survey's picker rows use `.result` too (survey.css), so
+   undo the row layout for the card. */
+.card.result {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  padding: var(--s-5);
+  gap: var(--s-4);
+}
+.card.result + .card.result {
+  border-top: var(--bw) solid var(--rule-strong);
+}
+
+/* A working-out row is a term, its value and its explanation, all inside the definition list. */
+.parts dd.parts__why {
+  text-align: left;
+  margin: 0;
+}
+
+.formula {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A suggested act's score inside its chip keeps the chip's own colour, including when the chip is pressed (inverted). */
+.chipbtn .chip__score {
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--strong-weight);
+  opacity: 0.85;
+}
+
+/* ---- Crowd map (owner area). The design system's map.css is a full-viewport prototype layout; these are the pieces the
+   in-app page needs, scoped by their own class names so nothing else is touched. */
+.layerbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.layerchip {
+  min-height: 40px;
+  padding: 0 var(--s-3);
+  font-size: var(--t-sm);
+}
+.mapx {
+  display: grid;
+  gap: var(--s-4);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  align-items: start;
+}
+.mapx__col {
+  display: grid;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.mapx__frame {
+  position: relative;
+  border-radius: var(--card-r);
+  overflow: hidden;
+  border: 2px solid var(--rule-strong);
+  box-shadow: var(--e2);
+  background: var(--bg-sunken);
+}
+.crowdmap {
+  width: 100%;
+  height: min(62vh, 560px);
+  min-height: 360px;
+}
+.mapx__note {
+  position: absolute;
+  left: var(--s-3);
+  bottom: var(--s-3);
+  max-width: 70%;
+  background: var(--warn-soft);
+  border-radius: var(--r-sm);
+  padding: var(--s-2) var(--s-3);
+  font-size: var(--t-sm);
+}
+.mapx__side {
+  display: grid;
+  gap: var(--s-4);
+  align-content: start;
+  min-width: 0;
+}
+.mapx__bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 64px;
+}
+.mapx__bars span {
+  flex: 1 1 0;
+  min-width: 4px;
+  height: var(--h);
+  background: var(--brand);
+  border: 2px solid var(--ink);
+  border-bottom: 0;
+  border-radius: 3px 3px 0 0;
+}
+.listtable {
+  width: 100%;
+  font-size: var(--t-sm);
+}
+.listtable th,
+.listtable td {
+  text-align: left;
+  padding: var(--s-2);
+  border-bottom: var(--bw-hair) solid var(--rule);
+}
+.mappin {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: 50%;
+  display: block;
+}
+.mappin:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+.mappin.is-on {
+  filter: drop-shadow(0 0 0 var(--ink)) drop-shadow(3px 3px 0 var(--ink));
+}
+@media (max-width: 1099px) {
+  .mapx {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .crowdmap {
+    height: 58vh;
+    min-height: 320px;
+  }
+}

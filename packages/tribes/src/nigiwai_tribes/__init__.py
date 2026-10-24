@@ -3,6 +3,7 @@
 from .build import build_matrix
 from .config import DROPPED_NAMESPACES, TribesConfig
 from .pipeline import Placement, TribeCard, TribeResult, carry_names, compute, input_hash, place
+from .scenes import SceneAct, SceneGroup, scene_groups
 from .stability import measure
 from .types import Matrix, Pick, Respondent, StabilityReport, Tag, TagRef, Unlock
 
@@ -12,6 +13,8 @@ __all__ = [
     "Pick",
     "Placement",
     "Respondent",
+    "SceneAct",
+    "SceneGroup",
     "StabilityReport",
     "Tag",
     "TagRef",
@@ -25,4 +28,5 @@ __all__ = [
     "input_hash",
     "measure",
     "place",
+    "scene_groups",
 ]

@@ -22,9 +22,12 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from .db import assert_rls_effective, make_engine
 from .deps import AppState
 from .ratelimit import RateLimiter
-from .routers import auth, health, owner, public
+from .routers import auth, brief, demo, health, owner, public, soundcheck, trust
+from .routers import map as map_router
+from .services.geocode import Geocoder
 from .services.guard_stores import PgBackedLedger, PgRecorder, PgRegistry, PgResponseStore
 from .services.lineup import MusicBrainz
+from .services.llm import build_llm
 from .services.picker import PickerService
 from .settings import Settings, get_settings
 
@@ -139,22 +142,56 @@ async def build_state(
             "no Qloo key configured: the picker serves saved matches only and nothing calls Qloo"
         )
     musicbrainz = MusicBrainz(engine, settings.musicbrainz_url, settings.lineup_contact)
+    limiter = RateLimiter(redis)
+    llm = build_llm(
+        settings.anthropic_key_file,
+        settings.llm_model,
+        base_url=settings.llm_base_url,
+        timeout=settings.llm_timeout_seconds,
+    )
     if settings.embedded_worker:
-        from .worker import run_forever
+        from .worker import DemoRefresh, run_forever
 
         stop = asyncio.Event()
-        tasks.append(asyncio.create_task(run_forever(engine, guard, stop, musicbrainz)))
+        demo_refresh = DemoRefresh(llm, limiter, settings.llm_daily_limit)
+        tasks.append(
+            asyncio.create_task(run_forever(engine, guard, stop, musicbrainz, demo_refresh))
+        )
     state = AppState(
         settings=settings,
         engine=engine,
         redis=redis,
-        limiter=RateLimiter(redis),
+        limiter=limiter,
         guard=guard,
         ledger=ledger,
         picker=PickerService(engine, guard),
         musicbrainz=musicbrainz,
+        geocoder=Geocoder(engine, settings.nominatim_url, settings.lineup_contact),
+        llm=llm,
     )
+    if state.llm is None:
+        log.info("no model key configured: the AI-alone comparison will say so")
     return state, tasks
+
+
+async def close_state(state: AppState, tasks: list[asyncio.Task[Any]]) -> None:
+    """Stop the background tasks and close every connection `build_state` opened."""
+    for task in tasks:
+        task.cancel()
+    for task in tasks:
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+    if state.ledger is not None:
+        with contextlib.suppress(Exception):
+            await state.ledger.flush()
+    if state.guard is not None:
+        await state.guard.aclose()
+    await state.musicbrainz.aclose()
+    await state.geocoder.aclose()
+    if state.llm is not None:
+        await state.llm.aclose()
+    await state.redis.aclose()
+    await state.engine.dispose()
 
 
 def create_app(
@@ -169,19 +206,7 @@ def create_app(
         try:
             yield
         finally:
-            for task in tasks:
-                task.cancel()
-            for task in tasks:
-                with contextlib.suppress(asyncio.CancelledError):
-                    await task
-            if state.ledger is not None:
-                with contextlib.suppress(Exception):
-                    await state.ledger.flush()
-            if state.guard is not None:
-                await state.guard.aclose()
-            await state.musicbrainz.aclose()
-            await state.redis.aclose()
-            await state.engine.dispose()
+            await close_state(state, tasks)
 
     app = FastAPI(
         title="Nigiwai API",
@@ -229,5 +254,12 @@ def create_app(
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(owner.router)
+    app.include_router(soundcheck.router)
+    app.include_router(brief.router)
+    app.include_router(brief.public)
+    app.include_router(map_router.router)
+    app.include_router(demo.router)
+    app.include_router(trust.public)
+    app.include_router(trust.owner)
     app.include_router(public.router)
     return app

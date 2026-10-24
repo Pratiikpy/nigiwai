@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
@@ -17,7 +18,9 @@ from qloo_guard import QlooGuard
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from .services import lineup, tribes
+from .services import demo as demo_service
+from .services import lineup, soundcheck, tribes
+from .services.llm import LlmClient
 
 log = logging.getLogger("nigiwai.worker")
 
@@ -25,6 +28,16 @@ POLL_SECONDS = 2.0
 MAX_ATTEMPTS = 4
 STALE_AFTER_MINUTES = 10
 NIGHTLY_EVERY = 900.0  # seconds between sweeps that queue businesses whose groups are a day old
+DEMO_EVERY = 6 * 3600.0  # seconds between looks for demo venues that are a week old
+
+
+@dataclass
+class DemoRefresh:
+    """What rebuilding a demo venue needs beyond the database, Qloo and MusicBrainz."""
+
+    llm: LlmClient | None
+    limiter: Any
+    daily_limit: int
 
 
 async def claim(engine: AsyncEngine) -> Any | None:
@@ -103,6 +116,11 @@ async def run_job(
             doc.get("state"),
             (doc.get("events") or {}).get("used"),
         )
+    elif job.kind == "suggest_acts":
+        await soundcheck.run_suggest_job(
+            engine, guard, UUID(str(job.tenant_id)), UUID(str(job.business_id))
+        )
+        log.info("suggest_acts %s", job.business_id)
     else:
         raise ValueError(f"unknown job kind {job.kind!r}")
 
@@ -140,20 +158,47 @@ async def sweep_stale_businesses(engine: AsyncEngine) -> int:
         return result.rowcount
 
 
+async def refresh_demo(
+    engine: AsyncEngine, guard: QlooGuard | None, mb: lineup.MusicBrainz, demo: DemoRefresh
+) -> list[str]:
+    """Rebuild the demo venues that are a week old, one at a time, since each takes minutes. A venue whose rebuild fails
+    keeps its old results and stays visible; the error is stored on it and the next look is hours away."""
+    rebuilt: list[str] = []
+    for slug in await demo_service.due_for_rebuild(engine):
+        spec = next((s for s in demo_service.SPECS if s.slug == slug), None)
+        if spec is None:
+            continue
+        try:
+            await demo_service.build_venue(
+                engine, guard, mb, demo.llm, demo.limiter, demo.daily_limit, spec
+            )
+        except Exception:
+            log.exception("demo venue %s could not be rebuilt", slug)
+        else:
+            rebuilt.append(slug)
+            log.info("demo venue %s rebuilt", slug)
+    return rebuilt
+
+
 async def run_forever(
     engine: AsyncEngine,
     guard: QlooGuard | None,
     stop: asyncio.Event | None = None,
     mb: lineup.MusicBrainz | None = None,
+    demo: DemoRefresh | None = None,
 ) -> None:
     stop = stop or asyncio.Event()
     last_sweep = 0.0
+    last_demo = 0.0
     loop = asyncio.get_running_loop()
     while not stop.is_set():
         try:
             if loop.time() - last_sweep > NIGHTLY_EVERY:
                 last_sweep = loop.time()
                 await sweep_stale_businesses(engine)
+            if demo is not None and mb is not None and loop.time() - last_demo > DEMO_EVERY:
+                last_demo = loop.time()
+                await refresh_demo(engine, guard, mb, demo)
             if await work_once(engine, guard, mb):
                 continue
         except Exception:
@@ -165,11 +210,12 @@ async def run_forever(
 def main() -> None:  # pragma: no cover - the process entry point
     import signal
 
-    from .app import build_state
+    from .app import build_state, close_state
     from .settings import get_settings
 
     async def go() -> None:
-        state, tasks = await build_state(get_settings())
+        settings = get_settings().model_copy(update={"embedded_worker": False})
+        state, tasks = await build_state(settings)
         stop = asyncio.Event()
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
@@ -178,11 +224,10 @@ def main() -> None:  # pragma: no cover - the process entry point
             ):  # Windows has no signal handlers on the loop
                 loop.add_signal_handler(sig, stop.set)
         try:
-            await run_forever(state.engine, state.guard, stop, state.musicbrainz)
+            demo = DemoRefresh(state.llm, state.limiter, state.settings.llm_daily_limit)
+            await run_forever(state.engine, state.guard, stop, state.musicbrainz, demo)
         finally:
-            for t in tasks:
-                t.cancel()
-            await state.engine.dispose()
+            await close_state(state, tasks)
 
     logging.basicConfig(level=logging.INFO)
     asyncio.run(go())

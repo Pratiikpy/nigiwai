@@ -64,6 +64,14 @@ class FakeQloo:
         self.delay = 0.0  # seconds every call takes, to exercise slow answers
         # entity id -> (female index, older-minus-younger age contrast), for the demographics answers
         self.demographics: dict[str, tuple[float, float]] = {}
+        # entity id -> planted group, for artist insights: an entity in the same group as the signal's majority scores
+        # high, anything else low, with a small stable jitter so no two scores tie
+        self.group_of: dict[str, int] = {}
+        self.names: dict[
+            str, str
+        ] = {}  # entity id -> name, for entities scored but absent from the catalogue
+        # artists offered as neighbours when insights is asked with no results filter, best matches first by group
+        self.neighbour_pool: list[dict[str, Any]] = []
 
     def supports(self, path: str, params: Params) -> bool:
         return True
@@ -104,6 +112,8 @@ class FakeQloo:
                     },
                     transport="rest",
                 )
+            if kind == "urn:entity:artist" and self.group_of:
+                return self._artist_insights(p, seed)
             if kind == "urn:entity:place":
                 places = [
                     {
@@ -155,6 +165,50 @@ class FakeQloo:
             hits = [e for e in self.catalogue if e["entity_id"] in wanted]
             return RawResponse(status=200, body={"results": hits}, transport="rest")
         return RawResponse(status=404, body=None, transport="rest")
+
+    def _affinity(self, seeds: list[str], entity_id: str) -> float:
+        votes: dict[int, int] = {}
+        for sd in seeds:
+            g = self.group_of.get(sd)
+            if g is not None:
+                votes[g] = votes.get(g, 0) + 1
+        home = max(votes, key=lambda g: (votes[g], -g)) if votes else None
+        jitter = (int(entity_id.replace("-", "")[-6:], 16) % 997) / 997 * 0.02
+        return (0.93 if self.group_of.get(entity_id) == home else 0.72) + jitter
+
+    def _artist_insights(self, p: dict[str, str], seed: str) -> RawResponse:
+        seeds = seed.split(",") if seed else []
+        wanted = [e for e in p.get("filter.results.entities", "").split(",") if e]
+        by_id = {e["entity_id"]: e for e in [*self.catalogue, *self.neighbour_pool]}
+        if wanted:
+            pool = [
+                by_id.get(e) or {"name": self.names.get(e, f"Planted {e[-6:]}"), "entity_id": e}
+                for e in wanted
+                if e not in seeds
+            ]
+        else:
+            pool = sorted(
+                (e for e in self.neighbour_pool if e["entity_id"] not in seeds),
+                key=lambda e: -self._affinity(seeds, e["entity_id"]),
+            )[: int(p.get("take", "20"))]
+        rows = [
+            {
+                "name": e["name"],
+                "entity_id": e["entity_id"],
+                "type": "urn:entity",
+                "subtype": "urn:entity:artist",
+                "popularity": e.get("popularity", 0.2),
+                "tags": e.get("tags", []),
+                "query": {"affinity": self._affinity(seeds, e["entity_id"])},
+                "properties": e.get("properties", {}),
+            }
+            for e in pool
+        ]
+        return RawResponse(
+            status=200,
+            body=self._with_warnings({"success": True, "results": {"entities": rows}}, seed),
+            transport="rest",
+        )
 
     def _demographic(self, entity_id: str) -> dict[str, Any]:
         female, contrast = self.demographics[entity_id]

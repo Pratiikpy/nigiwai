@@ -61,7 +61,10 @@ async def test_concurrent_duplicate_signups_leave_one_account_and_no_500(
     codes = sorted(r.status_code for r in results)
     assert codes.count(201) == 1 and set(codes) <= {201, 409}, codes
     assert admin.execute("SELECT count(*) FROM app_user").fetchone() == (1,)
-    assert admin.execute("SELECT count(*) FROM tenant").fetchone() == (1,)
+    # the one account's tenant, besides the demo venues' system tenant that every database has
+    assert admin.execute(
+        "SELECT count(*) FROM tenant WHERE id <> '6e1c0de0-0000-4000-8000-00000000d3a0'"
+    ).fetchone() == (1,)
 
 
 async def test_weak_and_junk_passwords_are_refused(world: World) -> None:

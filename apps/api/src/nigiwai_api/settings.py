@@ -42,6 +42,21 @@ class Settings(BaseSettings):
     # harness adds about 2.4 s of Node start-up per call. Empty means every purpose prefers the harness.
     qloo_rest_first: str = "picker,lineup,tribes"
 
+    # The language model behind the "AI alone" comparison (M23). Without a key file the comparison says so and the rest of
+    # the product is unaffected. The key is read on the server only and is never sent to a browser or logged.
+    anthropic_key_file: str | None = None
+    llm_model: str = "claude-sonnet-5-5"
+    llm_base_url: str | None = None  # a local test server, or a gateway
+    llm_timeout_seconds: float = 25.0
+    llm_daily_limit: int = 100  # model calls per account per day
+
+    # The public demo venues (judge mode) let anyone run new checks, and each one calls Qloo. These cap the whole site per
+    # day, on top of a per-network limit, and sit well inside the Guard's monthly share for the fit class (5,000 calls, so
+    # about 1,250 new checks a month at four calls each). Raise them only with the Qloo allowance in mind.
+    demo_runs_per_day: int = 60
+    demo_searches_per_day: int = 300
+    demo_compares_per_day: int = 100
+
     # Run the background worker inside the API process. Fine for one small instance and for development; a production
     # deployment runs `python -m nigiwai_api.worker` as its own service and turns this off.
     embedded_worker: bool = True
@@ -51,6 +66,10 @@ class Settings(BaseSettings):
     lineup_contact: str = (
         "local development; set NIGIWAI_LINEUP_CONTACT to a URL or email before public use"
     )
+
+    # The crowd map finds a neighbourhood from the name a guest typed, through OpenStreetMap's Nominatim (at most one
+    # request a second, identified by the contact above, every answer cached).
+    nominatim_url: str = "https://nominatim.openstreetmap.org"
 
     # Public survey
     nonce_ttl_seconds: int = 3600

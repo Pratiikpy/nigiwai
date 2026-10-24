@@ -32,6 +32,8 @@ class AppState:
     musicbrainz: Any = (
         None  # MusicBrainz client (services.lineup); typed loosely for the same reason
     )
+    llm: Any = None  # LlmClient (services.llm), or None when no model key is configured
+    geocoder: Any = None  # Geocoder (services.geocode)
 
 
 def state_of(request: Request) -> AppState:

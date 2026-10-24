@@ -1,0 +1,16 @@
+/* Qloo trace list and validator rows, shared by the proof panel and the chat. */
+.calls { display: grid; gap: 0; counter-reset: c; }
+.call { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: var(--s-3); padding: var(--s-3) 0; border-top: var(--bw-hair) solid var(--rule); }
+.call:first-child { border-top: 0; }
+.call__n { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; font-family: var(--font-mono); font-size: var(--t-xs); background: var(--bg-sunken); color: var(--ink); box-shadow: inset 0 0 0 var(--bw-hair) var(--ink-3); }
+[data-dir="b"] .call__n { border-radius: 0; }
+.call__b { display: grid; gap: 3px; min-width: 0; font-size: var(--t-sm); }
+.call__ep { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.call__m { font-family: var(--font-mono); font-size: var(--t-xs); color: var(--ink-3); }
+.call__ep b { font-family: var(--font-mono); font-size: var(--t-sm); font-weight: 500; }
+.call__p { font-size: var(--t-xs); color: var(--ink-2); line-height: 1.5; overflow-wrap: anywhere; }
+.call__r { display: flex; gap: 6px; align-items: flex-start; flex-wrap: wrap; font-size: var(--t-xs); color: var(--ink); line-height: 1.4; }
+.call__r .ic { color: var(--ok); margin-top: 1px; }
+.call[data-status="warn"] .call__r .ic { color: var(--warn); }
+.call__t { margin-left: auto; color: var(--ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.call__note { font-size: var(--t-xs); color: var(--warn); }
