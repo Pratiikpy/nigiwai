@@ -196,3 +196,61 @@ export type CardExtras = {
   near: CardEntity[];
   calls?: number | null;
 };
+
+/** A POST whose answer is a stream of server-sent events (Ask Nigiwai). Each event is handed over as it arrives. A refusal
+ * before the stream starts (no AI service, a daily limit, a bad question) comes back as an ApiError like any other call. */
+export async function postStream(
+  path: string,
+  body: unknown,
+  onEvent: (name: string, data: unknown) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (csrfToken) headers["x-csrf-token"] = csrfToken;
+  let response: Response;
+  try {
+    response = await fetch(`/api/v1${path}`, { method: "POST", headers, body: JSON.stringify(body), credentials: "same-origin", signal });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    throw new ApiError(0, "We couldn't reach the server. Check your connection and try again.");
+  }
+  if (!response.ok) {
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      /* not JSON */
+    }
+    throw describe(response.status, payload);
+  }
+  if (!response.body) throw new ApiError(0, "The answer could not be read.");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  const flush = (chunk: string) => {
+    let name = "message";
+    let data = "";
+    for (const line of chunk.split("\n")) {
+      if (line.startsWith("event: ")) name = line.slice(7);
+      else if (line.startsWith("data: ")) data += line.slice(6);
+    }
+    if (!data) return; // a keep-alive comment
+    try {
+      onEvent(name, JSON.parse(data));
+    } catch {
+      /* a malformed event is skipped, never fatal */
+    }
+  };
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let cut = buffer.indexOf("\n\n");
+    while (cut >= 0) {
+      flush(buffer.slice(0, cut));
+      buffer = buffer.slice(cut + 2);
+      cut = buffer.indexOf("\n\n");
+    }
+  }
+  if (buffer.trim()) flush(buffer);
+}

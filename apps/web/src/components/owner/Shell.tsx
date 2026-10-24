@@ -17,6 +17,7 @@ const NAV: { href: string; label: string; icon: IconName }[] = [
   { href: "/app/map", label: "Crowd map", icon: "map" },
   { href: "/app/people", label: "My people", icon: "people" },
   { href: "/app/soundcheck", label: "Soundcheck", icon: "bolt" },
+  { href: "/app/ask", label: "Ask Nigiwai", icon: "chat" },
   { href: "/app/brief", label: "Booking Brief", icon: "download" },
   { href: "/app/proof", label: "Proof", icon: "shield" },
   { href: "/app/posters", label: "QR posters", icon: "qr" },

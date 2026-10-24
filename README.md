@@ -18,6 +18,7 @@ Status: work in progress. [docs/BUILD_STATE.md](docs/BUILD_STATE.md) says exactl
 - **Booking Brief** (`/app/brief`): one page for a booker or partner: your crowd, three acts with scores and per-group fit, a Wildcard, the best nights. Save it as a one-page PDF or make a share link that expires in 30 days and can be turned off. Names and our own scores only.
 - **Crowd map** (`/app/map`): your sites on a real map with how many guests scanned and who they are, hexagons for the neighbourhoods guests say they come from, and what Qloo says is around. A site or neighbourhood with fewer than 10 guests is only a pin or a count. Choose the period, turn layers on and off, and copy a link that reopens the view.
 - **Today** (`/app/today`): this week's quietest hours from your scans and opening hours, and up to two actions (fill an empty chair, book an act), each with its reason, evidence labelled measured, observed or modelled, and the Soundcheck behind it. Accept, dismiss, or log an accepted action as a move. With too little data it says what would unlock more instead of guessing, and opening it makes no Qloo call.
+- **Ask Nigiwai** (`/app/ask`): ask about your crowd or about taste and culture. A model with a fixed set of Qloo-backed tools answers, and code checks the answer before you see it: every item must have been returned by a Qloo call during the question, names come from Qloo's records, a name in the sentences that no call returned is removed, and an evidence label has to be earned. The steps stream as they happen, the answer is stored, and the Qloo calls behind it can be reopened. It needs an AI service (`NIGIWAI_ANTHROPIC_KEY_FILE` or `ANTHROPIC_API_KEY`); without one it says so before you type.
 - **Qloo Guard** (`packages/qloo-guard`): every Qloo call goes through typed requests, rule checks, a private cache, a rate limiter, a monthly budget and a trace.
 - **Privacy by construction**: no IP address, user agent or exact time is stored with an answer; every tenant table is protected by row-level security that the application role cannot bypass.
 
@@ -48,6 +49,20 @@ just test-live          # spends Qloo quota; needs a key
 just e2e                # real Chrome against the running stack
 just check              # lint, types, unit and integration tests
 ```
+
+## Browser tests
+
+`just e2e` drives real Chrome against the running stack (`just up`, `just migrate`, the API on :8000 and the built web app on :3000). Start the API with these in its environment so the tests never send a question to a service we do not run:
+
+```sh
+NIGIWAI_QLOO_KEY_FILE=<your key file>        # Qloo stays real
+NIGIWAI_NOMINATIM_URL=http://127.0.0.1:18089 # the map spec serves a stand-in place finder here
+NIGIWAI_LLM_BASE_URL=http://127.0.0.1:18090  # the Ask spec serves a stand-in model here
+ANTHROPIC_API_KEY=sk-any-stand-in-value      # read by the API only to talk to that stand-in
+NIGIWAI_MIN_COMPLETION_SECONDS=0
+```
+
+The judge-mode spec (`demo.spec.ts`) opens the real demo venues, so build them first with `just demo`. The `live.spec.ts` specs spend Qloo quota and run only with `NIGIWAI_RUN_LIVE=1`.
 
 ## Deploy
 
