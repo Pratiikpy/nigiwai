@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openAllWeek, plantCrowd, plantPool, plantWeek, publishedVenue, resetRateLimits, shot, signIn, sql, watch } from "./helpers";
+import { openAllWeek, plantCrowd, plantGrow, plantPool, plantWeek, publishedVenue, resetRateLimits, shot, signIn, sql, watch } from "./helpers";
 
 // Every owner page at 320 CSS pixels wide, the narrowest width WCAG asks content to reflow to (1.4.10), with real data on it:
 // nothing may spill sideways and cause a horizontal scroll bar for the page, apart from a region that scrolls on purpose.
@@ -15,6 +15,7 @@ const PAGES: [string, string][] = [
   ["/app/people", "My people"],
   ["/app/soundcheck", "Soundcheck"],
   ["/app/sound", "Sound plan"],
+  ["/app/grow", "Grow"],
   ["/app/moves", "Moves"],
   ["/app/drafts", "Drafts"],
   ["/app/ask", "Ask Nigiwai"],
@@ -42,6 +43,7 @@ test("reflow: every owner page fits in 320 pixels without a sideways scroll bar"
     .poll(async () => (await sql("SELECT state FROM tribe_version WHERE business_id = $1 ORDER BY version DESC LIMIT 1", [venue.businessId])).rows[0]?.state, { timeout: 120_000 })
     .toMatch(/provisional|named/);
   await plantPool(venue.tenantId, venue.businessId, ["Amber Lanes", "Birch and Wire", "Cold Harbour", "Dune Parade", "Ember Choir", "Fallow Fields", "Garnet Row"]);
+  await plantGrow(venue.tenantId, venue.businessId, "apart");
   await sql("INSERT INTO move (tenant_id, business_id, kind, title, started_on, source, weekdays, hour_from, hour_to) VALUES ($1, $2, 'act', 'Residency: The Quiet Engines, every Friday evening', current_date - 14, 'manual', ARRAY[4]::smallint[], 18, 22)", [venue.tenantId, venue.businessId]);
   await signIn(page, venue.email);
 

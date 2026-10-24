@@ -70,6 +70,7 @@ export const MODULE_OF_PATH: Record<string, string> = {
   "/app/soundcheck": "soundcheck",
   "/app/brief": "brief",
   "/app/sound": "sound",
+  "/app/grow": "grow",
   "/app/moves": "moves",
   "/app/drafts": "drafts",
 };

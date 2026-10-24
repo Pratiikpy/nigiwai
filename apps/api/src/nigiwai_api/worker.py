@@ -19,7 +19,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from .services import demo as demo_service
-from .services import lineup, soundcheck, tribes
+from .services import grow, lineup, soundcheck, tribes
 from .services.llm import LlmClient
 
 log = logging.getLogger("nigiwai.worker")
@@ -121,6 +121,9 @@ async def run_job(
             engine, guard, UUID(str(job.tenant_id)), UUID(str(job.business_id))
         )
         log.info("suggest_acts %s", job.business_id)
+    elif job.kind == "grow":
+        await grow.run_job(engine, guard, UUID(str(job.tenant_id)), UUID(str(job.business_id)))
+        log.info("grow %s", job.business_id)
     else:
         raise ValueError(f"unknown job kind {job.kind!r}")
 

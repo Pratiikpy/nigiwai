@@ -249,3 +249,55 @@ test("soundcheck an act against a real crowd: a score from Qloo's answers, every
   await anon.close();
   expect(problems).toEqual([]);
 });
+
+test("grow reads a real crowd: a button press queues the worker, the page waits and then shows what Qloo answered with the checks beside it", async ({ page, request }, info) => {
+  test.setTimeout(480_000);
+  await resetRateLimits();
+  const problems = watch(page);
+  const venue = await publishedVenue(request);
+  const crowds = await resolveRealCrowds(request, venue.token);
+  await plantRealCrowds(venue.qrId, venue.businessId, crowds, 120, 17);
+  await sql("UPDATE job SET run_after = now() WHERE business_id = $1", [venue.businessId]);
+  await expect
+    .poll(async () => (await sql("SELECT count(*)::int AS n FROM tribe_version WHERE business_id = $1 AND state IN ('provisional', 'named')", [venue.businessId])).rows[0]?.n, {
+      timeout: 150_000,
+      intervals: [3000],
+    })
+    .toBeGreaterThan(0);
+
+  await signIn(page, venue.email);
+  await page.goto("/app/grow");
+  await expect(page.getByTestId("not-ready")).toHaveAttribute("data-state", "not_run");
+  await page.getByTestId("ask").click();
+  await expect(page.getByTestId("not-ready")).toHaveAttribute("data-state", /queued|running/, { timeout: 15_000 });
+  await shot(page, info, "live-grow-waiting");
+  // the worker runs it against real Qloo and the page updates itself
+  await expect(page.getByTestId("ghosts")).toBeVisible({ timeout: 300_000 });
+  await expect(page.getByTestId("not-ready")).toHaveCount(0);
+  const ghosts = page.getByTestId("ghosts");
+  const status = await ghosts.getAttribute("data-status");
+  expect(["ok", "none", "not_group_specific"]).toContain(status);
+  if (status === "ok") {
+    expect(await page.getByTestId("ghost").count()).toBeGreaterThan(0);
+    await expect(page.getByTestId("ghost-carrying").first()).toContainText("Fewer than 10 of your guests pick it.");
+  }
+  for (const id of ["nearby", "elsewhere"]) {
+    const section = page.getByTestId(id);
+    await expect(section).toHaveAttribute("data-status", /ok|empty/);
+    await expect(page.getByTestId(`${id}-note`)).not.toBeEmpty();
+    if ((await section.getAttribute("data-status")) === "ok") {
+      await expect(section.getByTestId("place").first()).toBeVisible();
+      await expect(page.getByTestId(`${id}-check`)).toContainText("of its first ten places");
+    }
+  }
+  await page.getByTestId("calls-disc").locator("summary").click();
+  await expect(page.getByTestId("calls").locator("li").first()).toContainText("/v2/insights", { timeout: 15_000 });
+  expect(await page.getByTestId("calls").locator("li").count()).toBeGreaterThanOrEqual(5);
+  await shot(page, info, "live-grow");
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await setTheme(page, "dark");
+  await shot(page, info, "live-grow", "dark");
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await setTheme(page, "light");
+  expect(problems.filter((p) => !/_rsc=|ERR_ABORTED/.test(p))).toEqual([]);
+});

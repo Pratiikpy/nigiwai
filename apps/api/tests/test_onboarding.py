@@ -627,7 +627,7 @@ async def test_the_plan_can_be_switched_by_the_owner_and_core_modules_cannot(
     assert back["overrides"] == {}
     assert back["version"] == 3
 
-    for module_id in ("today", "ask", "grow", "nonsense"):
+    for module_id in ("today", "ask", "nonsense"):
         res = await owner.put("/plan", json={"overrides": {module_id: False}})
         assert res.status_code == 422, (module_id, res.text)
         assert "cannot be switched" in res.json()["detail"]

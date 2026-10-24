@@ -592,7 +592,7 @@ MODULES: tuple[Module, ...] = (
     Module("map", "Crowd map", "/app/map", False),
     Module("soundcheck", "Soundcheck", "/app/soundcheck", False),
     Module("brief", "Booking Brief", "/app/brief", False),
-    Module("grow", "Grow", "/app/grow", False, built=False),
+    Module("grow", "Grow", "/app/grow", False),
     Module("sound", "Sound plan", "/app/sound", False),
     Module("moves", "Moves", "/app/moves", False),
     Module("drafts", "Drafts", "/app/drafts", False),
@@ -666,6 +666,15 @@ def plan_for(profile: Profile, overrides: dict[str, bool] | None = None) -> Plan
         elif m.id == "moves":
             what = "Moves log what you change and show whether scans in the same slot moved."
             on, reason = True, f"On because every business changes things. {what}"
+        elif m.id == "grow":
+            what = "Grow looks for tastes missing from your crowd and for places that serve it; what it finds is modelled from Qloo and offered as ideas to check."
+            if "grow" in profile.goals:
+                on, reason = True, f"On because you want to reach new kinds of customers. {what}"
+            else:
+                on, reason = (
+                    False,
+                    f"Off because reaching new customers is not one of your goals. {what}",
+                )
         elif m.id == "sound":
             what = "The Sound plan ranks acts to play by time of the week from who is in the room then."
             if profile.type in ("promoter", "festival"):

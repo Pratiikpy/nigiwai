@@ -59,9 +59,15 @@ test("a demo venue: suggested acts, a full verdict with its working, the compari
   const [venue] = await built(page);
   if (!venue) throw new Error("unreachable");
   await page.goto("/try");
+  // PRD phase 3b: judge mode opens a real venue in under 10 seconds from the stored results, with the first suggested acts on screen
+  const openedAt = Date.now();
   await page.getByTestId("venue-card").filter({ hasText: venue.name }).click();
   await expect(page).toHaveURL(new RegExp(`/try/${venue.slug}$`));
   await expect(page.getByRole("heading", { name: venue.name, level: 1 })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Suggested acts" }).getByRole("button").first()).toBeVisible();
+  const openedIn = Date.now() - openedAt;
+  info.annotations.push({ type: "judge mode open time", description: `${venue.name} opened with suggestions in ${openedIn} ms` });
+  expect(openedIn).toBeLessThan(10_000);
   await expect(page.getByText("Modelled from public lineups.")).toBeVisible();
   // nothing that needs an account is offered
   await expect(page.getByRole("link", { name: "Open My people" })).toHaveCount(0);

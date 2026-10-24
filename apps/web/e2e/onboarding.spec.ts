@@ -191,8 +191,9 @@ test("onboarding: the fixed questions lead to a check, then a saved business and
   await expect(page.locator('[data-module="soundcheck"]')).toHaveAttribute("data-on", "false");
   await expect(page.locator('[data-module="soundcheck"] .onb-plan__why')).toContainText("Off because you do not host live music");
   await expect(page.locator('[data-module="today"] input')).toBeDisabled(); // core: always on
-  await expect(page.locator('[data-module="grow"] input')).toBeDisabled(); // not built
-  await expect(page.locator('[data-module="grow"] .onb-plan__why')).toContainText("Not built yet");
+  await expect(page.locator('[data-module="grow"]')).toHaveAttribute("data-on", "false");
+  await expect(page.locator('[data-module="grow"] input')).toBeEnabled(); // built, and not core: the owner may switch it
+  await expect(page.locator('[data-module="grow"] .onb-plan__why')).toContainText("Off because reaching new customers is not one of your goals");
   await expect(page.getByLabel("Time zone")).not.toHaveValue("");
   await page.getByLabel("Time zone").fill("Europe/London");
   await shot(page, info, "onboarding-confirm");

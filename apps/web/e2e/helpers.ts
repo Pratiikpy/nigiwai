@@ -395,3 +395,99 @@ export async function plantPool(tenantId: string, businessId: string, names: str
   );
   return { groups, version: latest.version };
 }
+
+export type GrowMode = "crowd" | "apart" | "near" | "no_ghosts";
+
+/**
+ * A finished Grow run for a venue, planted in the same shape the worker stores, so the browser tests never send a request to
+ * Qloo for it. It is made for the venue's latest fitted groups. Modes: "crowd" (ghosts, and places matched to the crowd but
+ * not told apart between groups), "apart" (places told apart, with one group having none of its own), "near" (Qloo's lists did
+ * not change with the crowd's taste) and "no_ghosts" (Qloo gave every group the same acts, and the business has no place kind).
+ */
+export async function plantGrow(tenantId: string, businessId: string, mode: GrowMode = "crowd", status: "ready" | "queued" | "running" | "failed" = "ready"): Promise<{ groups: { index: number; label: string }[]; version: number }> {
+  const latest = (
+    await sql<{ version: number; result: { tribes: { index: number; label: string; share: number; shown?: boolean }[] } }>(
+      "SELECT version, result FROM tribe_version WHERE business_id = $1 ORDER BY version DESC LIMIT 1",
+      [businessId],
+    )
+  ).rows[0];
+  if (!latest) throw new Error("no fitted groups");
+  const shown = latest.result.tribes.filter((t) => t.shown);
+  const groups = shown.map((t) => ({ index: t.index, label: t.label }));
+  const names = ["Shoegaze", "Dream pop", "Doom", "Math rock", "Krautrock"];
+  const acts = (g: number) => [0, 1, 2].map((n) => ({ entity_id: randomUUID(), name: `Neighbour ${g}-${n}`, genres: [names[g % names.length]!.toLowerCase(), "indie"] }));
+  const items = shown.map((t, g) => ({
+    group_index: t.index,
+    tag_id: `urn:tag:subgenre:qloo:${names[g % names.length]!.toLowerCase().replace(/\W+/g, "_")}`,
+    tag: names[g % names.length]!,
+    bridges: ["Indie", "Folk"].slice(0, 1 + (g % 2)),
+    carrying: g === 1 ? 14 : null,
+    unit: "guests" as const,
+    neighbours_with_tag: 9 - g,
+    acts: acts(g),
+  }));
+  const place = (k: number, base: number, prefix: string) => ({
+    entity_id: randomUUID(),
+    name: `${prefix} ${k}`,
+    distance_m: base + 60 * k,
+    address: `${k + 1} Invented Street`,
+    lat: 51.5,
+    lon: -0.12,
+  });
+  const list = (prefix: string, base: number, n = 5) => Array.from({ length: n }, (_, k) => place(k, base, prefix));
+  const limitP = { seed_effect_min: 0.5, similarity_max: 0.3 };
+  const ghosts =
+    mode === "no_ghosts"
+      ? {
+          status: "not_group_specific",
+          reason: "Qloo gave your groups mostly the same neighbouring acts (overlap 80%), so it cannot say who is missing from one group rather than another.",
+          unit: "guests",
+          act_similarity: 0.8,
+          groups_read: groups.map((g) => g.index),
+          skipped: [],
+          limit: { similarity_max: 0.5, absent_share: 0.05, bridge_share: 0.25, min_acts: 2, min_group: 10 },
+          items: [],
+        }
+      : {
+          status: "ok",
+          reason: "",
+          unit: "guests",
+          act_similarity: 0.0,
+          groups_read: groups.map((g) => g.index),
+          skipped: mode === "near" ? [{ group_index: groups[groups.length - 1]!.index, reason: "Qloo did not give an answer that depended on this group's favourites." }] : [],
+          limit: { similarity_max: 0.5, absent_share: 0.05, bridge_share: 0.25, min_acts: 2, min_group: 10 },
+          items: mode === "near" ? items.slice(0, -1) : items,
+        };
+  let places: Record<string, unknown>;
+  if (mode === "no_ghosts") {
+    places = { status: "unavailable", reason: "Place suggestions need a bar, live music venue, cafe, restaurant or hotel bar as the business type." };
+  } else if (mode === "near") {
+    const near = { label: "Who serves your crowd nearby", status: "ok", mode: "near", crowd_size: 12, seed_effect: 0.0, similarity: null, told_apart: false, items: list("Bar", 90), by_group: null, limit: limitP, gaps: [], note: "Qloo's list did not change when it was given your crowd's taste, so these are places near you, not places matched to your crowd." };
+    const far = { label: "Lookalike places further out", status: "ok", mode: "near", crowd_size: 12, seed_effect: 0.1, similarity: null, told_apart: false, items: list("Far bar", 1300), by_group: null, limit: limitP, note: "Qloo's wider list barely changed with your crowd's taste, so these are places in the wider area, not lookalikes of your venue." };
+    places = { status: "ok", category: "bar", radius_m: 800, wide_radius_m: 4000, nearby: near, elsewhere: far, dropped_closed: 0, closure_unanswered: false };
+  } else if (mode === "apart") {
+    const byGroup = (prefix: string, base: number) => groups.map((g, i) => ({ group_index: g.index, group: g.label, items: list(`${prefix}${i}`, base), own: i !== groups.length - 1 }));
+    const near = { label: "Who serves your crowd nearby", status: "ok", mode: "taste", crowd_size: 12, seed_effect: 1.0, similarity: 0.22, told_apart: true, items: list("Bar", 90), by_group: byGroup("Bar ", 90), limit: limitP, gaps: [{ group_index: groups[groups.length - 1]!.index, group: groups[groups.length - 1]!.label }], note: "Qloo gave each group different places, so each group is listed on its own." };
+    const far = { label: "Lookalike places further out", status: "ok", mode: "taste", crowd_size: 12, seed_effect: 0.95, similarity: 0.1, told_apart: true, items: list("Far bar", 1300), by_group: byGroup("Far ", 1300), limit: limitP, note: "Places further out that Qloo ties to your crowd's taste. Ideas to look at, not a measure of who goes there." };
+    places = { status: "ok", category: "bar", radius_m: 800, wide_radius_m: 4000, nearby: near, elsewhere: far, dropped_closed: 1, closure_unanswered: false };
+  } else {
+    const near = { label: "Who serves your crowd nearby", status: "ok", mode: "taste", crowd_size: 12, seed_effect: 0.67, similarity: 0.59, told_apart: false, items: list("Bar", 90), by_group: null, limit: limitP, gaps: [], note: "Qloo changed this list for your crowd's taste, but gave your groups mostly the same places, so they are listed for the crowd as a whole and no gap is claimed for one group." };
+    const far = { label: "Lookalike places further out", status: "ok", mode: "taste", crowd_size: 12, seed_effect: 0.95, similarity: null, told_apart: false, items: list("Far bar", 1300), by_group: null, limit: limitP, note: "Places further out that Qloo ties to your crowd's taste. Ideas to look at, not a measure of who goes there." };
+    places = { status: "ok", category: "bar", radius_m: 800, wide_radius_m: 4000, nearby: near, elsewhere: far, dropped_closed: 0, closure_unanswered: false };
+  }
+  const doc = {
+    basis: { kind: "guests", ref: String(latest.version), label: "Your guests (90, groups version " + latest.version + ")", provisional: true },
+    groups: shown.map((t) => ({ index: t.index, label: t.label, share: t.share })),
+    ghosts,
+    places,
+    trace_ids: [],
+    generated_at: new Date().toISOString(),
+  };
+  const result = status === "ready" ? JSON.stringify(doc) : null;
+  await sql(
+    "INSERT INTO grow_run (business_id, tenant_id, status, basis_kind, basis_ref, result, error) VALUES ($1, $2, $3, 'guests', $4, $5::jsonb, $6)" +
+      " ON CONFLICT (business_id) DO UPDATE SET status = EXCLUDED.status, basis_kind = 'guests', basis_ref = EXCLUDED.basis_ref, result = EXCLUDED.result, error = EXCLUDED.error, updated_at = now()",
+    [businessId, tenantId, status, String(latest.version), result, status === "failed" ? "Qloo gave no neighbouring acts for any of your groups, so there is nothing to build on yet." : null],
+  );
+  return { groups, version: latest.version };
+}

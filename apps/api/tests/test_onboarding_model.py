@@ -292,10 +292,9 @@ def test_the_plan_gives_a_reason_for_every_module_and_says_what_is_not_built() -
     for core in ("today", "people", "ask", "venue", "survey", "posters", "proof"):
         assert by_id[core]["locked"]
         assert by_id[core]["on"]
-    for unbuilt in ("grow",):
-        assert by_id[unbuilt]["on"] is False
-        assert by_id[unbuilt]["available"] is False
-        assert by_id[unbuilt]["reason"] == "Not built yet."
+    assert all(m["available"] for m in by_id.values())  # every module in the list is built
+    assert by_id["grow"]["on"] is False
+    assert "Off because reaching new customers is not one of your goals" in by_id["grow"]["reason"]
     wants_acts = om.build_profile(
         "The Halcyon",
         {"type": "hotel_bar", "area": "Leeds", "goals": ["book_acts"], "hosts_live_music": False},
@@ -312,12 +311,17 @@ def test_the_plan_gives_a_reason_for_every_module_and_says_what_is_not_built() -
     assert "Off because you do not host live music" in off["reason"]
 
 
-def test_the_owners_own_switches_win_except_on_a_core_module_or_one_that_is_not_built() -> None:
+def test_the_owners_own_switches_win_except_on_a_core_module_or_one_that_is_not_built(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     profile = om.build_profile(
         "Quill", {"type": "cafe", "area": "Leeds", "goals": ["grow"], "hosts_live_music": False}
     )
-    switches = {"soundcheck": True, "map": False, "today": False, "ask": False, "grow": True}
-    plan = {e.id: e for e in om.plan_for(profile, switches).entries}
+    later = om.Module("later", "Later", "/app/later", False, built=False)
+    with monkeypatch.context() as patch:
+        patch.setattr(om, "MODULES", (*om.MODULES, later))
+        switches = {"soundcheck": True, "map": False, "today": False, "ask": False, "later": True}
+        plan = {e.id: e for e in om.plan_for(profile, switches).entries}
     assert plan["soundcheck"].on
     assert plan["soundcheck"].changed
     assert plan["soundcheck"].reason.startswith("Switched on by you.")
@@ -330,7 +334,10 @@ def test_the_owners_own_switches_win_except_on_a_core_module_or_one_that_is_not_
     assert plan["today"].on
     assert plan["ask"].on
     assert not plan["today"].changed  # core: cannot be switched off
-    assert plan["grow"].on is False  # not built: cannot be switched on
+    assert plan["later"].on is False  # not built: cannot be switched on
+    assert plan["later"].available is False
+    assert plan["later"].reason == "Not built yet."
+    assert plan["grow"].on  # the goal "grow" switches it on
     same = {e.id: e for e in om.plan_for(profile, {"map": True}).entries}
     assert not same["map"].changed  # asking for what the planner chose changes nothing
 

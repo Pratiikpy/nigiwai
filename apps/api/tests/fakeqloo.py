@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+from collections.abc import Callable
 from typing import Any
 
 from qloo_guard.requests import Params
@@ -48,6 +49,39 @@ def movie(name: str, entity_id: str | None = None, year: int = 2001) -> dict[str
     }
 
 
+def place(
+    name: str,
+    entity_id: str | None = None,
+    *,
+    distance: float,
+    affinity: float | None = None,
+    closed: bool | None = False,
+    lat: float = 51.5,
+    lon: float = -0.12,
+) -> dict[str, Any]:
+    """A bar as Qloo describes one: located, with its distance from the asked-about point and, when the question had a taste
+    signal, an affinity."""
+    query: dict[str, Any] = {"distance": distance}
+    if affinity is not None:
+        query["affinity"] = affinity
+    properties: dict[str, Any] = {"address": f"{name}, Invented Street"}
+    if closed is not None:
+        properties["is_closed"] = closed
+    return {
+        "name": name,
+        "entity_id": entity_id or new_id(),
+        "type": "urn:entity",
+        "subtype": "urn:entity:place",
+        "popularity": 0.3,
+        "location": {"lat": lat, "lon": lon},
+        "tags": [
+            {"id": "urn:tag:category:place:bar", "name": "bar", "type": "urn:tag:category:place"}
+        ],
+        "query": query,
+        "properties": properties,
+    }
+
+
 class FakeQloo:
     """Search matches by substring over a catalogue; insights (the eligibility probe) answers 200 or 400."""
 
@@ -72,6 +106,10 @@ class FakeQloo:
         ] = {}  # entity id -> name, for entities scored but absent from the catalogue
         # artists offered as neighbours when insights is asked with no results filter, best matches first by group
         self.neighbour_pool: list[dict[str, Any]] = []
+        # when set, place insights is answered by this: (seed ids, radius in metres, take) -> places, best first. Every place it
+        # returns is also known to /entities, so the closure check can read its `is_closed`.
+        self.place_answer: Callable[[list[str], int, int], list[dict[str, Any]]] | None = None
+        self.known_places: dict[str, dict[str, Any]] = {}
 
     def supports(self, path: str, params: Params) -> bool:
         return True
@@ -114,6 +152,20 @@ class FakeQloo:
                 )
             if kind == "urn:entity:artist" and self.group_of:
                 return self._artist_insights(p, seed)
+            if kind == "urn:entity:place" and self.place_answer is not None:
+                rows = self.place_answer(
+                    [s for s in seed.split(",") if s],
+                    int(p.get("filter.location.radius", "0") or 0),
+                    int(p.get("take", "20")),
+                )
+                self.known_places.update({r["entity_id"]: r for r in rows})
+                return RawResponse(
+                    status=200,
+                    body=self._with_warnings(
+                        {"success": True, "results": {"entities": rows}}, seed
+                    ),
+                    transport="rest",
+                )
             if kind == "urn:entity:place":
                 places = [
                     {
@@ -162,7 +214,11 @@ class FakeQloo:
             )
         if path == "/entities":
             wanted = set(p.get("entity_ids", "").split(","))
-            hits = [e for e in self.catalogue if e["entity_id"] in wanted]
+            hits = [
+                e
+                for e in [*self.catalogue, *self.known_places.values()]
+                if e["entity_id"] in wanted
+            ]
             return RawResponse(status=200, body={"results": hits}, transport="rest")
         return RawResponse(status=404, body=None, transport="rest")
 

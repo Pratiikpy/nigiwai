@@ -446,3 +446,16 @@ fieldset.card > legend + * { clear: both; }
 .tablewrap:focus-visible { outline: var(--focus-w) solid var(--focus, var(--accent)); outline-offset: var(--focus-off); }
 /* the small caption after a large figure is body text, not display type */
 .fit__of { font-family: var(--font-body); font-weight: var(--body-weight); letter-spacing: normal; text-shadow: none; margin-left: var(--s-2); }
+
+/* ---------- Grow (M8): who else might come, who serves the crowd nearby, places like yours further out ---------- */
+.gr-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-4); }
+.gr-h { font-size: var(--t-xl); line-height: 1.15; }
+.gr-groups { display: grid; gap: var(--s-4); grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 900px) { .gr-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1280px) { .gr-groups { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.gr-group { display: grid; gap: var(--s-3); align-content: start; min-width: 0; }
+.gr-group__t { font-size: var(--t-lg); overflow-wrap: anywhere; }
+.gr-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-4); }
+.gr-list > li { display: grid; gap: var(--s-1); min-width: 0; overflow-wrap: anywhere; }
+.gr-ghost__t { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--s-1); }
+.gr-gap { padding: var(--s-2) var(--s-3); border: var(--bw-hair) dashed var(--warn); border-radius: var(--r-sm); font-size: var(--t-sm); line-height: 1.4; }

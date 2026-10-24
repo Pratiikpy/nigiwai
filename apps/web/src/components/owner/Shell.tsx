@@ -20,6 +20,7 @@ const NAV: { href: string; label: string; icon: IconName }[] = [
   { href: "/app/people", label: "My people", icon: "people" },
   { href: "/app/soundcheck", label: "Soundcheck", icon: "bolt" },
   { href: "/app/sound", label: "Sound plan", icon: "music" },
+  { href: "/app/grow", label: "Grow", icon: "hex" },
   { href: "/app/moves", label: "Moves", icon: "flag" },
   { href: "/app/drafts", label: "Drafts", icon: "send" },
   { href: "/app/ask", label: "Ask Nigiwai", icon: "chat" },
