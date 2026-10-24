@@ -11,6 +11,7 @@ import { VenueProvider } from "@/lib/venue";
 
 const NAV: { href: string; label: string; icon: IconName }[] = [
   { href: "/app", label: "Overview", icon: "layers" },
+  { href: "/app/today", label: "Today", icon: "calendar" },
   { href: "/app/venue", label: "Your venue", icon: "pin" },
   { href: "/app/survey", label: "Survey", icon: "list" },
   { href: "/app/map", label: "Crowd map", icon: "map" },

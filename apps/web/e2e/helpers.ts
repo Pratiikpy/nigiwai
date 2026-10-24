@@ -275,3 +275,66 @@ export async function plantLineup(tenantId: string, businessId: string, opts: { 
     [tenantId, businessId, randomUUID(), opts.place ?? "Mercury Test Room", JSON.stringify(doc)],
   );
 }
+
+/** Open every day 12:00 to 23:00, so the Today board can tell a quiet hour from a closed one. */
+export async function openAllWeek(businessId: string): Promise<void> {
+  const week = Array.from({ length: 7 }, () => ({ open: "12:00", close: "23:00" }));
+  await sql("UPDATE location SET hours = $1::jsonb WHERE business_id = $2", [JSON.stringify(week), businessId]);
+}
+
+/** Give the 90 planted responses of a venue an exact week: one scan in every open hour from 12:00 to 22:00, none on
+ * Wednesday 14:00 to 17:00, and a busy Friday evening and Saturday 19:00. */
+export async function setRhythm(qrId: string): Promise<void> {
+  const cells: [number, number][] = [];
+  for (let day = 0; day < 7; day++) {
+    for (let hour = 12; hour < 23; hour++) {
+      let n = 1;
+      if (day === 2 && hour >= 14 && hour <= 16) n = 0;
+      if (day === 4 && hour >= 18 && hour <= 20) n += 4;
+      if (day === 5 && hour === 19) n += 4;
+      for (let i = 0; i < n; i++) cells.push([day, hour]);
+    }
+  }
+  const ids = (await sql<{ id: string }>("SELECT id FROM response WHERE qr_point_id = $1 ORDER BY id", [qrId])).rows.map((r) => r.id);
+  if (ids.length !== cells.length) throw new Error(`plant ${cells.length} responses, found ${ids.length}`);
+  for (let i = 0; i < ids.length; i++) {
+    await sql("UPDATE response SET local_weekday = $1, local_hour = $2 WHERE id = $3", [cells[i]![0], cells[i]![1], ids[i]]);
+  }
+}
+
+/** Suggested acts and their stored Soundchecks for a venue read from public lineups, as the worker would leave them. */
+export async function plantSuggestions(tenantId: string, businessId: string, acts: { name: string; score: number; best: string }[]): Promise<void> {
+  const ref = (
+    await sql<{ ref: string }>(
+      `SELECT to_char(finished_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"+00:00"') AS ref FROM lineup_profile WHERE business_id = $1`,
+      [businessId],
+    )
+  ).rows[0]?.ref;
+  if (!ref) throw new Error("plant a lineup first");
+  const top: unknown[] = [];
+  for (const a of acts) {
+    const entity = randomUUID();
+    const band = [a.score - 5, Math.min(100, a.score + 4)];
+    const result = {
+      status: "ok",
+      score: a.score,
+      band,
+      provisional: true,
+      groups: [
+        { index: 0, label: "Indie rock acts", share: 0.55, fit: 0.93, status: "scored" },
+        { index: 1, label: "Jazz acts", share: 0.3, fit: 0.71, status: "scored" },
+        { index: 2, label: "Techno acts", share: 0.15, fit: 0.3, status: "scored" },
+      ],
+    };
+    const row = await sql<{ id: string }>(
+      "INSERT INTO soundcheck (tenant_id, business_id, candidate_entity_id, candidate_name, basis_kind, basis_ref, input_hash, weights_version, result) VALUES ($1, $2, $3, $4, 'lineup', $5, $6, 'v0', $7::jsonb) RETURNING id",
+      [tenantId, businessId, entity, a.name, ref, randomUUID(), JSON.stringify(result)],
+    );
+    top.push({ soundcheck_id: row.rows[0]!.id, entity_id: entity, name: a.name, score: a.score, band, best_for: a.best, provisional: true });
+  }
+  const doc = { basis: { kind: "lineup", ref, label: "public lineups" }, considered: acts.length, scored: acts.length, top, wildcard: null, generated_at: new Date().toISOString() };
+  await sql(
+    "INSERT INTO act_suggestion (business_id, tenant_id, status, basis_kind, basis_ref, result) VALUES ($1, $2, 'ready', 'lineup', $3, $4::jsonb) ON CONFLICT (business_id) DO UPDATE SET status = 'ready', basis_kind = 'lineup', basis_ref = EXCLUDED.basis_ref, result = EXCLUDED.result",
+    [businessId, tenantId, ref, JSON.stringify(doc)],
+  );
+}

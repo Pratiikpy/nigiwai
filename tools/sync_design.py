@@ -23,6 +23,7 @@ DEFAULT_CSS = [
     "survey.css",
     "trace.css",
     "map.css",
+    "today.css",
     "v06.css",
 ]
 FONTS = ["bricolage-normal-300-800.woff2", "dmmono-normal-400.woff2", "dmmono-normal-500.woff2"]
