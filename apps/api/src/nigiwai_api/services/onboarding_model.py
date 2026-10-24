@@ -593,6 +593,7 @@ MODULES: tuple[Module, ...] = (
     Module("soundcheck", "Soundcheck", "/app/soundcheck", False),
     Module("brief", "Booking Brief", "/app/brief", False),
     Module("grow", "Grow", "/app/grow", False),
+    Module("atlas", "City Taste Atlas", "/app/atlas", False),
     Module("sound", "Sound plan", "/app/sound", False),
     Module("moves", "Moves", "/app/moves", False),
     Module("drafts", "Drafts", "/app/drafts", False),
@@ -675,6 +676,12 @@ def plan_for(profile: Profile, overrides: dict[str, bool] | None = None) -> Plan
                     False,
                     f"Off because reaching new customers is not one of your goals. {what}",
                 )
+        elif m.id == "atlas":
+            what = "The City Taste Atlas pools what guests pick across venues near you that have joined; it shows nothing until at least five have."
+            on, reason = (
+                False,
+                f"Off until you choose it, because it only works once other venues near you join. {what}",
+            )
         elif m.id == "sound":
             what = "The Sound plan ranks acts to play by time of the week from who is in the room then."
             if profile.type in ("promoter", "festival"):

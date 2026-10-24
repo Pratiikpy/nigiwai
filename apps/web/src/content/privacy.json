@@ -27,6 +27,7 @@
     "Qloo's facts are shown separately from our own interpretation, labelled measured, observed or modelled.",
     "A guest can delete their own answers at any time with the receipt code. An owner can delete their account and its data.",
     "The Qloo key stays on our server. What reaches Qloo from a guest is the words typed in the search box and the item chosen, with nothing that links them to the guest's answers; Qloo may keep and reuse them under its own terms, and the consent text says so.",
-    "A venue's own details (its name's kind, its position on the map) are sent to Qloo to find what is around it. They describe a business, not a person."
+    "A venue's own details (its name's kind, its position on the map) are sent to Qloo to find what is around it. They describe a business, not a person.",
+    "Only if an owner chooses to join the City Taste Atlas are counts of what their guests picked pooled with other venues in the same neighbourhood square (about a kilometre). The pooled table has no column for a venue, an account or a guest. A venue counts with 10 answers, a neighbourhood opens with 5 such venues, and an item is listed with 10 answers from at least 3 venues and only if no one venue supplied more than half of them. These minimums are enforced by the database. A venue can leave at any time, and its counts leave at the next rebuild."
   ]
 }

@@ -459,3 +459,11 @@ fieldset.card > legend + * { clear: both; }
 .gr-list > li { display: grid; gap: var(--s-1); min-width: 0; overflow-wrap: anywhere; }
 .gr-ghost__t { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--s-1); }
 .gr-gap { padding: var(--s-2) var(--s-3); border: var(--bw-hair) dashed var(--warn); border-radius: var(--r-sm); font-size: var(--t-sm); line-height: 1.4; }
+
+/* ---------- City Taste Atlas (M16) ---------- */
+.at-groups { display: grid; gap: var(--s-4); grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 900px) { .at-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.at-group { display: grid; gap: var(--s-3); align-content: start; min-width: 0; }
+.at-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-3); }
+.at-list > li { display: grid; min-width: 0; overflow-wrap: anywhere; }
+.at-list__n { display: grid; gap: 2px; }

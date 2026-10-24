@@ -18,8 +18,8 @@ from qloo_guard import QlooGuard
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from .services import atlas, grow, lineup, soundcheck, tribes
 from .services import demo as demo_service
-from .services import grow, lineup, soundcheck, tribes
 from .services.llm import LlmClient
 
 log = logging.getLogger("nigiwai.worker")
@@ -29,6 +29,9 @@ MAX_ATTEMPTS = 4
 STALE_AFTER_MINUTES = 10
 NIGHTLY_EVERY = 900.0  # seconds between sweeps that queue businesses whose groups are a day old
 DEMO_EVERY = 6 * 3600.0  # seconds between looks for demo venues that are a week old
+ATLAS_EVERY = (
+    6 * 3600.0
+)  # seconds between rebuilds of the City Taste Atlas (a venue joining or leaving asks for one at once)
 
 
 @dataclass
@@ -121,6 +124,9 @@ async def run_job(
             engine, guard, UUID(str(job.tenant_id)), UUID(str(job.business_id))
         )
         log.info("suggest_acts %s", job.business_id)
+    elif job.kind == "atlas_rebuild":
+        built = await atlas.rebuild(engine)
+        log.info("atlas_rebuild %s: %s rows", job.business_id, built)
     elif job.kind == "grow":
         await grow.run_job(engine, guard, UUID(str(job.tenant_id)), UUID(str(job.business_id)))
         log.info("grow %s", job.business_id)
@@ -193,12 +199,16 @@ async def run_forever(
     stop = stop or asyncio.Event()
     last_sweep = 0.0
     last_demo = 0.0
+    last_atlas = 0.0
     loop = asyncio.get_running_loop()
     while not stop.is_set():
         try:
             if loop.time() - last_sweep > NIGHTLY_EVERY:
                 last_sweep = loop.time()
                 await sweep_stale_businesses(engine)
+            if loop.time() - last_atlas > ATLAS_EVERY:
+                last_atlas = loop.time()
+                await atlas.rebuild(engine)
             if demo is not None and mb is not None and loop.time() - last_demo > DEMO_EVERY:
                 last_demo = loop.time()
                 await refresh_demo(engine, guard, mb, demo)

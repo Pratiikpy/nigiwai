@@ -24,6 +24,7 @@ from .deps import AppState
 from .ratelimit import RateLimiter
 from .routers import (
     ask,
+    atlas,
     auth,
     brief,
     demo,
@@ -279,6 +280,7 @@ def create_app(
     app.include_router(onboarding.router)
     app.include_router(moves.router)
     app.include_router(grow.router)
+    app.include_router(atlas.router)
     app.include_router(drafts.router)
     app.include_router(trust.public)
     app.include_router(trust.owner)

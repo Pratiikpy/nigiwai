@@ -16,6 +16,7 @@ const PAGES: [string, string][] = [
   ["/app/soundcheck", "Soundcheck"],
   ["/app/sound", "Sound plan"],
   ["/app/grow", "Grow"],
+  ["/app/atlas", "City Taste Atlas"],
   ["/app/moves", "Moves"],
   ["/app/drafts", "Drafts"],
   ["/app/ask", "Ask Nigiwai"],

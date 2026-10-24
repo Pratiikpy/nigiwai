@@ -184,7 +184,8 @@ test("soundcheck an act against a real crowd: a score from Qloo's answers, every
   const compare = page.getByTestId("compare");
   await expect(compare.getByTestId("compare-summary")).toContainText("Qloo returned", { timeout: 60_000 });
   await expect(compare.locator(".cmp__col").first().locator("li")).toHaveCount(6);
-  await expect(compare.getByTestId("ai-unavailable")).toContainText("no AI service is configured");
+  // with no model key the panel says none is configured; with a key set but a service that cannot be reached (the README's stand-in address) it says it did not answer. Either way it never invents an AI list.
+  await expect(compare.getByTestId("ai-unavailable")).toContainText(/no AI service is configured|the AI service did not answer/);
 
   // Show the working: the formula, the components and the fingerprint are all on the page.
   await page.getByText("Show the working").click();

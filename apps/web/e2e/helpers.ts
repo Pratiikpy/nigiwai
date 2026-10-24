@@ -491,3 +491,46 @@ export async function plantGrow(tenantId: string, businessId: string, mode: Grow
   );
   return { groups, version: latest.version };
 }
+
+/**
+ * Five venues in one neighbourhood square of their own (a random one, so earlier runs never share it), twelve guests each, with the
+ * item shapes the Atlas minimums are about: "everyone" is picked by all 60 guests, "three venues" by 12 guests at three venues, and
+ * "nine" by only 9. The venues after the first are switched in to the Atlas directly; the first is left to the test to join. The
+ * first venue must already have its published survey, as every `publishedVenue` has.
+ */
+export async function plantNeighbourhood(
+  venues: { businessId: string; qrId: string }[],
+  tag: string,
+): Promise<{ everyone: string; threeVenues: string; nine: string; lat: number; lon: number }> {
+  if (venues.length !== 5) throw new Error("the neighbourhood needs five venues");
+  const lat = 10 + Math.floor(Math.random() * 6000) / 100 + 0.005;
+  const lon = -100 + Math.floor(Math.random() * 20000) / 100 + 0.005;
+  await sql("UPDATE location SET geom = ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography WHERE business_id = ANY($3::uuid[])", [lon, lat, venues.map((v) => v.businessId)]);
+  const make = async (name: string) => {
+    const id = randomUUID();
+    await sql("INSERT INTO qloo_entity (entity_id, type, types, name_nfc, insights_eligible) VALUES ($1, 'urn:entity:artist', ARRAY['urn:entity:artist'], $2, true)", [id, `${name} ${tag}`]);
+    return id;
+  };
+  const everyone = await make("Sample act everyone");
+  const threeVenues = await make("Sample act three venues");
+  const nine = await make("Sample act nine");
+  for (const [v, venue] of venues.entries()) {
+    const survey = (await sql<{ id: string; version: number }>("SELECT id, version FROM survey WHERE business_id = $1 AND status = 'published'", [venue.businessId])).rows[0];
+    if (!survey) throw new Error("no published survey");
+    for (let i = 0; i < 12; i++) {
+      const picks = [everyone];
+      if (v < 3 && i < 4) picks.push(threeVenues);
+      if (v < 3 && i >= 4 && i < 7) picks.push(nine);
+      await sql("SELECT public_insert_response($1, $2, $3, 'v1', NULL, NULL, NULL, 'ok', $4, $5, $6)", [
+        venue.qrId,
+        survey.id,
+        survey.version,
+        picks,
+        picks.map(() => "urn:entity:artist"),
+        Buffer.from(randomUUID().replace(/-/g, ""), "hex"),
+      ]);
+    }
+    if (v > 0) await sql("UPDATE business SET atlas_opt_in = true, atlas_opt_in_at = now() WHERE id = $1", [venue.businessId]);
+  }
+  return { everyone, threeVenues, nine, lat, lon };
+}
