@@ -253,6 +253,16 @@ export function AskWorkspace() {
     };
   }, [base, businessId, tick]);
 
+  // a link from another page (an action on Today) can bring the question and the mode with it, to be sent by the owner
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get("q");
+    const m = params.get("mode");
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reading the address once on arrival
+    if (q) setText(q.slice(0, 600));
+    if (m === "crowd" || m === "culture") setMode(m);
+  }, []);
+
   // a refresh restores the answer in the address
   useEffect(() => {
     if (!businessId || restored.current) return;

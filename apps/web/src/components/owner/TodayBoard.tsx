@@ -182,6 +182,10 @@ function ActionCard({
             <Icon name="bolt" />
             Soundcheck this act
           </Link>
+          <Link className="btn btn--ghost" href={`/app/ask?mode=crowd&q=${encodeURIComponent(`Would ${action.act.name} suit my crowd, and would it clash with anyone?`)}`}>
+            <Icon name="chat" />
+            Ask Nigiwai about this
+          </Link>
         </div>
       ) : null}
       {accepted ? (

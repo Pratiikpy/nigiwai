@@ -93,6 +93,14 @@ test("today: a real week of scans shows the quietest stretch, two actions with l
   await a11y(page, "today full dark");
   await setTheme(page, "light");
 
+  // an action leads to Ask Nigiwai with the question ready to send
+  await fill.getByRole("link", { name: "Ask Nigiwai about this" }).click();
+  await expect(page).toHaveURL(/\/app\/ask\?mode=crowd&q=/);
+  await expect(page.getByLabel("Your question")).toHaveValue("Would Velvet Harbour suit my crowd, and would it clash with anyone?");
+  await expect(page.getByRole("button", { name: "About my crowd" })).toHaveAttribute("aria-pressed", "true");
+  await page.goBack();
+  await expect(page.getByTestId("action").first()).toBeVisible();
+
   // accept: it can be logged as a move, once
   await fill.getByRole("button", { name: "Accept" }).click();
   await expect(fill).toHaveAttribute("data-state", "accepted");
