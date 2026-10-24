@@ -66,6 +66,7 @@ test("sound plan: each stretch of the week names its own acts, says how busy it 
   await expect(evening.getByTestId("act")).toHaveCount(5);
   await expect(evening.getByTestId("mix")).toContainText("Measured");
   await expect(evening.getByTestId("busy")).toBeVisible();
+  await expect(evening.getByTestId("watch").first()).toContainText("Watch: ranks low for");
   const weekendEvening = page.locator('[data-key="weekend-evening"]');
   await expect(weekendEvening).toHaveAttribute("data-status", "ok");
   await expect(weekendEvening.getByTestId("busy")).toHaveAttribute("data-level", "busy"); // the busiest stretch of the planted week

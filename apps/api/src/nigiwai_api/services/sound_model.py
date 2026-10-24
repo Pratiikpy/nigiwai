@@ -32,6 +32,9 @@ DAYPARTS: tuple[tuple[str, str, tuple[int, ...]], ...] = (
     ("evening", "Evening", tuple(range(17, 22))),
     ("late", "Late night", (22, 23, 0, 1, 2, 3, 4)),
 )
+WATCH_SHARE = (
+    0.2  # a group needs this much of a stretch before an act that ranks poorly for it is flagged
+)
 BUSY_FROM = 0.75  # a stretch at or above this share of the busiest one is "busy"
 QUIET_BELOW = 0.35  # and below this "quiet"
 
@@ -103,6 +106,22 @@ def _act_score(
         WEIGHTS,
     )
     return value, shares, covered / total
+
+
+def _watch(
+    act: SoundAct, shares: dict[int, float], label_of: dict[int, str]
+) -> dict[str, Any] | None:
+    """The biggest part of the stretch the act ranks poorly for: a group with at least a fifth of the stretch that the act
+    ranks below the Fit Verdict's own weak line. None when it suits everyone who is there."""
+    weak = [i for i, share in shares.items() if share >= WATCH_SHARE and act.fits[i] < WEIGHTS.weak]
+    if not weak:
+        return None
+    worst = max(weak, key=lambda i: (shares[i], -i))
+    return {
+        "label": label_of[worst],
+        "share": round(shares[worst], 2),
+        "rank": round(act.fits[worst], 2),
+    }
 
 
 def build_plan(
@@ -193,6 +212,7 @@ def build_plan(
                     "best_for": label_of[best],
                     "best_share": round(shares[best], 2),
                     "best_rank": round(act.fits[best], 2),
+                    "watch": _watch(act, shares, label_of),
                 }
             )
     return {
@@ -227,6 +247,7 @@ def undated_plan(
                 "genres": list(act.genres[:3]),
                 "score": round(value),
                 "best_for": label_of[max(shares, key=lambda i: (shares[i] * act.fits[i], -i))],
+                "watch": _watch(act, shares, label_of),
             }
             for value, act, shares in ranked[:top]
         ],

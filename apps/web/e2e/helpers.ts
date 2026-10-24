@@ -384,7 +384,7 @@ export async function plantPool(tenantId: string, businessId: string, names: str
   const pool = names.map((name, i) => {
     const fits: Record<string, number> = {};
     groups.forEach((g, j) => {
-      fits[String(g)] = j === i % groups.length ? 0.92 - 0.01 * i : 0.35 + 0.02 * ((i + j) % 5);
+      fits[String(g)] = j === i % groups.length ? 0.92 - 0.01 * i : 0.2 + 0.03 * ((i + j) % 5); // best for one group, low for the others
     });
     return { entity_id: randomUUID(), name, genres: ["indie", "folk"], popularity: 0.3, score: 80 - i, fits };
   });

@@ -60,13 +60,13 @@ just check              # lint, types, unit and integration tests
 
 ```sh
 NIGIWAI_QLOO_KEY_FILE=<your key file>        # Qloo stays real
-NIGIWAI_NOMINATIM_URL=http://127.0.0.1:18089 # the map spec serves a stand-in place finder here
-NIGIWAI_LLM_BASE_URL=http://127.0.0.1:18090  # the Ask spec serves a stand-in model here
+NIGIWAI_NOMINATIM_URL=http://127.0.0.1:18089 # the map and onboarding specs serve a stand-in place finder here
+NIGIWAI_LLM_BASE_URL=http://127.0.0.1:18090  # the Ask and onboarding specs serve a stand-in model here
 ANTHROPIC_API_KEY=sk-any-stand-in-value      # read by the API only to talk to that stand-in
 NIGIWAI_MIN_COMPLETION_SECONDS=0
 ```
 
-The judge-mode spec (`demo.spec.ts`) opens the real demo venues, so build them first with `just demo`. The `live.spec.ts` specs spend Qloo quota and run only with `NIGIWAI_RUN_LIVE=1`.
+`reflow.spec.ts` opens every owner page at 320 pixels wide with real data on it and fails if the page gets a sideways scroll bar (WCAG 1.4.10). The judge-mode spec (`demo.spec.ts`) opens the real demo venues, so build them first with `just demo`. The `live.spec.ts` specs spend Qloo quota and run only with `NIGIWAI_RUN_LIVE=1`.
 
 ## Deploy
 

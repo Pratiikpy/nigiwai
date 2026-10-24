@@ -24,6 +24,12 @@ function Acts({ acts, empty }: { acts: SoundAct[]; empty: string }) {
             <span className="meta">
               {a.genres.length ? `${a.genres.join(", ")} · ` : ""}best for {a.best_for}
             </span>
+            {a.watch ? (
+              <span className="snd-acts__watch" data-testid="watch">
+                Watch: ranks low for {a.watch.label}
+                {a.watch.share < 1 ? `, ${Math.round(a.watch.share * 100)}% of this stretch` : ""}
+              </span>
+            ) : null}
           </span>
           <span className="snd-acts__s">
             <strong className="num">{a.score}</strong>

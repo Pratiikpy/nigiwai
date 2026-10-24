@@ -101,6 +101,9 @@ async def test_each_stretch_of_the_week_gets_the_acts_of_the_group_who_comes_the
     assert late["acts"][0]["name"].startswith("Neighbour 2-")
     for c in (morning, evening, late):
         assert len(c["acts"]) <= 5
+        assert all(
+            "watch" in a for a in c["acts"]
+        )  # each act says whether it ranks poorly for part of the stretch
         scores = [a["score"] for a in c["acts"]]
         assert scores == sorted(scores, reverse=True)
         assert c["busy_label"] in ("busy", "steady", "quiet")

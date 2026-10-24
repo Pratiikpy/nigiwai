@@ -142,3 +142,30 @@ def test_a_room_known_only_from_public_lineups_gets_one_list_and_no_time_of_day(
 def test_the_hours_of_a_stretch_read_as_a_span() -> None:
     assert sm.hours_text((5, 6, 7, 8, 9, 10, 11)) == "05:00 to 12:00"
     assert sm.hours_text((22, 23, 0, 1, 2, 3, 4)) == "22:00 to 05:00"
+
+
+def test_an_act_that_ranks_poorly_for_a_big_part_of_a_stretch_is_flagged_and_one_that_suits_everyone_is_not() -> (
+    None
+):
+    both = [
+        sm.SoundGroup(0, "Morning folk", spread((0, 1, 2, 3), (8, 9, 10), 4.0)),
+        sm.SoundGroup(
+            1, "Also mornings", spread((0, 1, 2, 3), (8, 9, 10), 3.0)
+        ),  # 3 of every 7 scans
+    ]
+    split = act("Folk Only", g0=0.95, g1=0.1)
+    everyone = act("Common Ground", g0=0.7, g1=0.7)
+    plan = sm.build_plan(both, [split, everyone], MASK)
+    acts = {a["name"]: a for a in cell(plan, "weekdays-morning")["acts"]}
+    assert acts["Folk Only"]["watch"] == {"label": "Also mornings", "share": 0.43, "rank": 0.1}
+    assert acts["Common Ground"]["watch"] is None
+    # a poorly ranked group that is only a sliver of the stretch is not worth a warning
+    sliver = [
+        sm.SoundGroup(0, "Morning folk", spread((0, 1, 2, 3), (8, 9, 10), 9.0)),
+        sm.SoundGroup(1, "A few others", spread((0, 1, 2, 3), (8, 9, 10), 1.0)),
+    ]
+    only = cell(sm.build_plan(sliver, [split], MASK), "weekdays-morning")["acts"][0]
+    assert only["watch"] is None
+    # the same flag on the one list a lineup-only room gets
+    flagged = sm.undated_plan([(0, "Folk scene", 0.6), (1, "Dance scene", 0.4)], [split])
+    assert flagged["acts"][0]["watch"] == {"label": "Dance scene", "share": 0.4, "rank": 0.1}

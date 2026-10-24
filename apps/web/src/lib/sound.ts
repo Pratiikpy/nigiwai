@@ -8,6 +8,8 @@ export type SoundAct = {
   best_for: string;
   best_share?: number;
   best_rank?: number;
+  /** The biggest part of the stretch the act ranks poorly for, if any. */
+  watch?: { label: string; share: number; rank: number } | null;
 };
 
 export type SoundCell = {

@@ -401,6 +401,7 @@ fieldset.card > legend + * { clear: both; }
 .snd-acts__name { font-weight: var(--strong-weight); color: var(--ink); text-decoration: none; }
 .snd-acts__name:hover { text-decoration: underline; }
 .snd-acts__s { font-size: var(--t-lg); }
+.snd-acts__watch { font-size: var(--t-sm); color: var(--warn); font-weight: var(--strong-weight); }
 .snd-notes { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); max-width: 70ch; }
 @media print { .shell__side, .shell__top, button { display: none !important; } .card { box-shadow: none !important; break-inside: avoid; } }
 
