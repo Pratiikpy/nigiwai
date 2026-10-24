@@ -342,3 +342,55 @@ def test_the_key_is_read_from_an_env_file_or_a_plain_file_and_never_guessed(
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-env-000")
     assert read_key(None) == "sk-env-000"  # with no file named, the environment variable
     assert read_key(str(env)) == "sk-abc-123"  # a named file wins over the environment
+
+
+def test_almost_json_still_gives_the_two_things_asked_for_and_nothing_else() -> None:
+    # a missing closing bracket, as a real model once wrote it
+    raw = '{"recognised": true, "similar": ["Rage Against the Machine", "System of a Down", "Korn", "Disturbed"}'
+    assert parse_answer(raw) == (
+        True,
+        ["Rage Against the Machine", "System of a Down", "Korn", "Disturbed"],
+    )
+    # inside a sentence and a code fence, with an escaped quote in a name
+    fenced = 'Sure:\n```json\n{"recognised": true, "similar": ["Guns N\\" Roses", "Korn"}\n```'
+    assert parse_answer(fenced) == (True, ['Guns N" Roses', "Korn"])
+    assert parse_answer('{"recognised": false, "similar": [}') == (False, [])
+    # text that does not say both things is not guessed at
+    for bad in (
+        '{"similar": ["Korn"]}',
+        '{"recognised": "maybe", "similar": []}',
+        "[1, 2]",
+        "no braces at all",
+    ):
+        with pytest.raises(LlmUnavailable):
+            parse_answer(bad)
+
+
+async def test_an_unreadable_answer_is_asked_for_once_more_and_a_second_failure_gives_a_reason(
+    world: World, admin: psycopg.Connection[Any]
+) -> None:
+    owner = await sign_up(world)
+    venue = await make_venue(owner)
+    sid, _ = await stored_soundcheck(world, admin, owner, venue, "Pale Meridian")
+    replies = iter(
+        [
+            "I think you mean something else.",
+            '{"recognised": true, "similar": ["Pale Meridian Neighbour 0"]}',
+        ]
+    )
+    model = FakeModel(lambda _u: httpx2.Response(200, json=message(next(replies))))
+    world.app.state.nigiwai.llm = model.client()
+    doc = (await get(owner, venue, sid)).json()
+    assert doc["ai"]["available"] and [i["name"] for i in doc["ai"]["items"]] == [
+        "Pale Meridian Neighbour 0"
+    ]
+    assert len(model.requests) == 2  # one unreadable answer, one good one
+
+    other = await sign_up(world)
+    venue2 = await make_venue(other)
+    sid2, _ = await stored_soundcheck(world, admin, other, venue2, "Second Act")
+    bad = FakeModel(reply("still not an answer"))
+    world.app.state.nigiwai.llm = bad.client()
+    doc2 = (await get(other, venue2, sid2)).json()
+    assert doc2["ai"]["available"] is False and "could not be read" in doc2["ai"]["reason"]
+    assert len(bad.requests) == 2  # tried twice, then said why

@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { Icon, type IconName } from "@/components/Icon";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { DeleteLogin } from "@/components/owner/AccountWorkspace";
 import { useSession } from "@/lib/session";
 import { MODULE_OF_PATH } from "@/lib/onboarding";
 import { VenueProvider, useVenue } from "@/lib/venue";
@@ -28,6 +29,8 @@ const NAV: { href: string; label: string; icon: IconName }[] = [
   { href: "/app/brief", label: "Booking Brief", icon: "download" },
   { href: "/app/proof", label: "Proof", icon: "shield" },
   { href: "/app/posters", label: "QR posters", icon: "qr" },
+  { href: "/app/team", label: "Team", icon: "people" },
+  { href: "/app/account", label: "Your login", icon: "lock" },
 ];
 
 /** The side menu. Once the owner has a plan, the tools it leaves off are hidden here (their pages still open by address). */
@@ -52,23 +55,41 @@ function Nav({ path, onNavigate }: { path: string; onNavigate: () => void }) {
 }
 
 export function Shell({ children }: { children: React.ReactNode }) {
-  const { state, signOut } = useSession();
+  const { state, signOut, switchAccount } = useSession();
   const path = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
 
   if (state.status === "loading") {
     return (
-      <div className="auth">
+      <main className="auth" id="main">
         <div className="res-status" role="status">
           <span className="spin" aria-hidden="true" />
           Loading your venue…
         </div>
-      </div>
+      </main>
+    );
+  }
+  if (state.status === "none") {
+    return (
+      <main className="auth" id="main">
+        <div className="auth__card card" data-testid="no-account">
+          <h1 className="display">You are not in an account.</h1>
+          <p className="muted">
+            {state.me.email} is not part of any venue&rsquo;s account right now. If someone invited you, open the invitation link they sent while you are signed in
+            as this address. Otherwise you can sign out.
+          </p>
+          <button className="btn" type="button" onClick={() => void signOut()}>
+            Sign out
+          </button>
+          <DeleteLogin onDeleted={() => router.replace("/login")} />
+        </div>
+      </main>
     );
   }
   if (state.status === "error") {
     return (
-      <div className="auth">
+      <main className="auth" id="main">
         <div className="auth__card card">
           <h1 className="display">We couldn&rsquo;t load your account.</h1>
           <p className="muted">{state.message}</p>
@@ -76,12 +97,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <Icon name="refresh" /> Try again
           </button>
         </div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <VenueProvider>
+    <VenueProvider key={state.tenant.id}>
     <div className="shell">
       <a className="skip-link" href="#main">
         Skip to the page
@@ -97,8 +118,28 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <aside className={`shell__side${open ? " is-open" : ""}`} id="side" aria-label="Main">
         <Logo href="/app" />
         <div className="side__who">
-          <strong>{state.tenant.name}</strong>
-          <span className="meta">{state.me.email}</span>
+          {state.me.tenants.length > 1 ? (
+            <>
+              <label className="meta" htmlFor="account-switch">
+                Account
+              </label>
+              <select className="input" id="account-switch" value={state.tenant.id} onChange={(e) => {
+                  switchAccount(e.target.value);
+                  setOpen(false);
+                }}>
+                {state.me.tenants.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : (
+            <strong>{state.tenant.name}</strong>
+          )}
+          <span className="meta">
+            {state.me.email} · {state.tenant.role}
+          </span>
         </div>
         <Nav path={path} onNavigate={() => setOpen(false)} />
         <div className="side__foot">

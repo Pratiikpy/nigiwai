@@ -17,7 +17,7 @@ const NAV = [
 export function PublicShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   return (
-    <>
+    <div className="pubframe">
       <a className="skip-link" href="#main">
         Skip to the content
       </a>
@@ -41,6 +41,6 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
           <Link href="/privacy">Privacy</Link> · <Link href="/evidence">Evidence</Link> · MIT licensed
         </p>
       </footer>
-    </>
+    </div>
   );
 }

@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from ..db import transaction
 from . import ask_prompt
 from . import ask_tools as tools
-from .llm import LlmClient, LlmUnavailable
+from .llm import LlmUnavailable, ModelClient
 
 log = logging.getLogger("nigiwai.ask")
 
@@ -165,6 +165,7 @@ def validate(run: tools.Run, raw: dict[str, Any]) -> dict[str, Any]:
             continue
         used.add(entity_id)
         confirmed = seen.first_tool in ("resolve_entity", "verify_place")
+        yours = seen.first_tool == "my_groups"
         items.append(
             {
                 "entity_id": entity_id,
@@ -172,8 +173,8 @@ def validate(run: tools.Run, raw: dict[str, Any]) -> dict[str, Any]:
                 "name": seen.name,
                 "type": seen.kind,
                 "reason": clean(it.get("reason"), 200),
-                "provenance": "confirmed" if confirmed else "surfaced",
-                "label": "observed",
+                "provenance": "yours" if yours else ("confirmed" if confirmed else "surfaced"),
+                "label": "measured" if yours else "observed",
                 "call": seen.first_call,
                 "detail": seen.note,
             }
@@ -233,7 +234,7 @@ def template_answer(run: tools.Run, reason: str) -> dict[str, Any]:
     surfaced = [
         s for s in run.seen.values() if s.first_tool in ("related", "places_nearby", "fit_verdict")
     ]
-    pool = surfaced or list(run.seen.values())
+    pool = surfaced or [s for s in run.seen.values() if s.first_tool != "my_groups"]
     items = [
         {
             "entity_id": s.entity_id,
@@ -293,7 +294,7 @@ async def _venue(engine: AsyncEngine, tenant_id: UUID, business_id: UUID) -> Any
 
 async def preflight(
     engine: AsyncEngine,
-    llm: LlmClient | None,
+    llm: ModelClient | None,
     limiter: Any,
     *,
     tenant_id: UUID,
@@ -327,7 +328,7 @@ async def preflight(
 async def ask(
     engine: AsyncEngine,
     guard: QlooGuard | None,
-    llm: LlmClient | None,
+    llm: ModelClient | None,
     limiter: Any,
     *,
     tenant_id: UUID,
@@ -393,6 +394,7 @@ async def ask(
     final: dict[str, Any] | None = None
     reason = ""
     repaired = False
+    item_repair = False
 
     try:
         while turns < MAX_TURNS and final is None:
@@ -426,7 +428,33 @@ async def ask(
             results: list[dict[str, Any]] = []
             for call in turn.tool_calls:
                 if call.name == "answer":
-                    final = validate(run, call.input)
+                    candidate = validate(run, call.input)
+                    found_something = any(
+                        s.first_tool in ("related", "places_nearby", "fit_verdict")
+                        for s in run.seen.values()
+                    )
+                    if (
+                        not candidate["items"]
+                        and found_something
+                        and not candidate["not_enough_data"]
+                        and not item_repair
+                    ):
+                        # Qloo returned things and the model listed none of them: ask once for the list before accepting it
+                        item_repair = True
+                        results.append(
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": call.id,
+                                "content": json.dumps(
+                                    {
+                                        "error": "Your answer listed no items. Call the answer tool again and list the items you recommend by the entity ids the tools returned."
+                                    }
+                                ),
+                                "is_error": True,
+                            }
+                        )
+                        break
+                    final = candidate
                     results.append(
                         {"type": "tool_result", "tool_use_id": call.id, "content": "recorded"}
                     )
@@ -452,6 +480,13 @@ async def ask(
                     }
                 )
             if final is None:
+                if turns >= MAX_TURNS - 3:
+                    results.append(
+                        {
+                            "type": "text",
+                            "text": f"You have {MAX_TURNS - turns} turns left. Call the answer tool now with what you have.",
+                        }
+                    )
                 messages.append({"role": "user", "content": results})
         if final is None and not reason:
             reason = "The assistant took too many steps, so it was stopped."

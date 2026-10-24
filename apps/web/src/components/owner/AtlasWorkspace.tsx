@@ -161,7 +161,7 @@ export function AtlasWorkspace({ base, canWrite }: { base: string; canWrite: boo
         ) : null}
         {doc.opted_in && canWrite ? (
           <div className="row row--wrap">
-            <button className="btn btn--ghost" type="button" disabled={busy} onClick={() => change(false)} data-testid="atlas-leave">
+            <button className="btn" type="button" disabled={busy} onClick={() => change(false)} data-testid="atlas-leave">
               Leave the Atlas
             </button>
           </div>

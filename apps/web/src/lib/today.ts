@@ -21,7 +21,7 @@ export type BoardAction = {
   evidence: Evidence[];
   fit: ActionFit | null;
   prov: string[];
-  act: { name: string; entity_id: string; soundcheck_id: string | null };
+  act: { name: string; entity_id: string; soundcheck_id: string | null } | null;
   decision: "accepted" | "dismissed" | null;
   logged: boolean;
 };

@@ -45,6 +45,18 @@ class Settings(BaseSettings):
     # The language model behind the "AI alone" comparison (M23). Without a key file the comparison says so and the rest of
     # the product is unaffected. The key is read on the server only and is never sent to a browser or logged.
     anthropic_key_file: str | None = None
+    anthropic_workspace_id: str | None = (
+        None  # needed only when the key is not scoped to one workspace
+    )
+    llm_provider: Literal["anthropic", "openai"] = (
+        "anthropic"  # openai: any OpenAI-compatible chat completions service
+    )
+    llm_key_file: str | None = (
+        None  # the key for an OpenAI-compatible service (or NIGIWAI_LLM_API_KEY in the environment)
+    )
+    llm_extra_body: str | None = (
+        None  # JSON merged into every request of an OpenAI-compatible service
+    )
     llm_model: str = "claude-sonnet-5-5"
     llm_base_url: str | None = None  # a local test server, or a gateway
     llm_timeout_seconds: float = 25.0

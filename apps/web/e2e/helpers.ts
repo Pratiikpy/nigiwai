@@ -80,15 +80,24 @@ export async function signIn(page: Page, email: string): Promise<void> {
   await expect(page).toHaveURL(/\/app$/);
 }
 
-export async function signUp(page: Page, business = "The Lantern"): Promise<{ email: string }> {
+/** Signing up shows the recovery code once; a person has to say they kept it before going on. Returns the code for tests that use it. */
+export async function keepRecoveryCode(page: Page): Promise<string> {
+  const code = (await page.getByTestId("recovery-code").innerText()).trim();
+  await page.getByTestId("recovery-saved").check();
+  await page.getByTestId("recovery-continue").click();
+  return code;
+}
+
+export async function signUp(page: Page, business = "The Lantern"): Promise<{ email: string; recoveryCode: string }> {
   const email = uniqueEmail("owner");
   await page.goto("/signup");
   await page.getByLabel("Venue or business name").fill(business);
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
   await page.getByRole("button", { name: "Create account" }).click();
+  const recoveryCode = await keepRecoveryCode(page);
   await expect(page).toHaveURL(/\/app$/);
-  return { email };
+  return { email, recoveryCode };
 }
 
 /** Sign an owner up through the API in an independent request context (its own cookie jar). */

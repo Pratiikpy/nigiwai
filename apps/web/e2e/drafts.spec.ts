@@ -8,7 +8,7 @@ async function a11y(page: Page, label: string) {
   const result = await new AxeBuilder({ page }).analyze();
   expect(result.violations.map((v) => `${label}: ${v.id} ${v.nodes.map((n) => n.html.slice(0, 120)).join(" | ")}`)).toEqual([]);
 }
-const prefetch = /requestfailed: GET \S+\?_rsc=\S+ net::ERR_ABORTED/;
+const prefetch = /requestfailed: GET \S+[?&]_rsc=\S+ net::ERR_ABORTED/;
 const GAP = /\[[^\]\n]{1,80}\]/g;
 
 test("drafts: made from an accepted action, never approvable with a gap, every step logged, and nothing is sent", async ({ page, request }, info) => {

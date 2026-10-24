@@ -23,7 +23,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from ..db import transaction
-from .llm import LlmClient, LlmUnavailable
+from .llm import LlmUnavailable, ModelClient
 
 log = logging.getLogger("nigiwai.compare")
 
@@ -55,20 +55,48 @@ def normalise(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", base).strip()
 
 
+def _recover(raw: str) -> tuple[bool, list[Any]] | None:
+    """What a model's almost-JSON still plainly says: the recognised flag and the quoted names after "similar". Used only when the
+    text is not valid JSON (a missing bracket is the usual fault), and only for the two things asked for."""
+    flag = re.search(r'"recognised"\s*:\s*(true|false)', raw)
+    start = re.search(r'"similar"\s*:\s*\[', raw)
+    if flag is None or start is None:
+        return None
+    body = raw[start.end() :]
+    end = body.find("]")
+    body = body if end < 0 else body[:end]
+    names: list[Any] = []
+    for quoted in re.findall(r'"((?:[^"\\]|\\.)*)"', body):
+        try:
+            names.append(json.loads(f'"{quoted}"'))
+        except ValueError:
+            names.append(quoted)
+    return flag.group(1) == "true", names
+
+
 def parse_answer(raw: str) -> tuple[bool, list[str]]:
-    """The model's JSON, read defensively: a code fence or a sentence around it is tolerated, nothing else is."""
+    """The model's JSON, read defensively: a code fence or a sentence around it is tolerated, and so is a missing bracket."""
+    unreadable = "The AI service answered in a form that could not be read."
     match = re.search(r"\{.*\}", raw, flags=re.S)
     if match is None:
-        raise LlmUnavailable("The AI service answered in a form that could not be read.")
+        raise LlmUnavailable(unreadable)
+    recognised: Any
+    similar: Any
     try:
         doc = json.loads(match.group(0))
     except json.JSONDecodeError as exc:
-        raise LlmUnavailable("The AI service answered in a form that could not be read.") from exc
-    if not isinstance(doc, dict) or not isinstance(doc.get("recognised"), bool):
-        raise LlmUnavailable("The AI service answered in a form that could not be read.")
+        found = _recover(match.group(0))
+        if found is None:
+            raise LlmUnavailable(unreadable) from exc
+        recognised, similar = found
+    else:
+        if not isinstance(doc, dict):
+            raise LlmUnavailable(unreadable)
+        recognised, similar = doc.get("recognised"), doc.get("similar")
+    if not isinstance(recognised, bool):
+        raise LlmUnavailable(unreadable)
     names: list[str] = []
     seen: set[str] = set()
-    similar = doc.get("similar")
     for item in similar if isinstance(similar, list) else []:
         if not isinstance(item, str):
             continue
@@ -77,7 +105,7 @@ def parse_answer(raw: str) -> tuple[bool, list[str]]:
         if n and key and key not in seen:
             seen.add(key)
             names.append(n)
-    return doc["recognised"], names[:LIST_SIZE]
+    return recognised, names[:LIST_SIZE]
 
 
 def summary(name: str, qloo_n: int, llm: dict[str, Any]) -> str:
@@ -135,7 +163,7 @@ async def exists(engine: AsyncEngine, tenant_id: UUID, soundcheck_id: UUID) -> b
 async def build(
     engine: AsyncEngine,
     guard: QlooGuard | None,
-    llm: LlmClient | None,
+    llm: ModelClient | None,
     limiter: Any,
     daily_limit: int,
     tenant_id: UUID,
@@ -238,13 +266,20 @@ async def build(
     return doc
 
 
-async def _answer(engine: AsyncEngine, llm: LlmClient, name: str) -> dict[str, Any]:
+async def _answer(engine: AsyncEngine, llm: ModelClient, name: str) -> dict[str, Any]:
     key = hashlib.sha256(f"{CACHE_VERSION}|{llm.model}|{normalise(name)}".encode()).hexdigest()
     found = await _cached(engine, key)
     if found is not None:
         return found
-    answer = await llm.complete(SYSTEM, USER.format(name=name), max_tokens=300)
-    recognised, names = parse_answer(answer.text)
+    # a model sometimes answers in a form that cannot be read: it is asked once more before the panel gives up
+    for attempt in range(2):
+        answer = await llm.complete(SYSTEM, USER.format(name=name), max_tokens=300)
+        try:
+            recognised, names = parse_answer(answer.text)
+            break
+        except LlmUnavailable:
+            if attempt == 1:
+                raise
     doc = {"recognised": recognised, "similar": names, "model": answer.model}
     await _store(engine, key, llm.model, doc)
     return doc

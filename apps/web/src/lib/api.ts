@@ -121,7 +121,8 @@ export type AgeBand = "18-24" | "25-34" | "35-44" | "45-54" | "55-64" | "65+";
 export type ResponseResult = { ok: boolean; receipt: string; reward: Reward | null };
 
 export type Tenant = { id: string; name: string; role: "owner" | "manager" | "viewer" };
-export type Me = { user_id: string; email: string; csrf_token: string; tenants: Tenant[] };
+/** `recovery_code` is present only in the answer to signing up: it is shown once and never sent again. */
+export type Me = { user_id: string; email: string; csrf_token: string; tenants: Tenant[]; recovery_code?: string | null };
 export type Business = { id: string; tenant_id: string; name: string; type: string; language: string; currency: string };
 export type Location = {
   id: string;

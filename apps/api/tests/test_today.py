@@ -333,3 +333,59 @@ async def test_the_board_is_private_to_its_account_and_its_writes_need_an_accoun
     assert (await mine.get(f"{base(owner, venue)}/today")).status_code == 404
     assert (await mine.get(f"/businesses/{uuid.uuid4()}/today")).status_code == 404
     assert admin.execute("SELECT count(*) FROM board_decision").fetchone() == (0,)
+
+
+async def test_a_cafe_is_offered_an_idea_from_its_own_scans_and_picks_and_no_act_to_book(
+    world: World, admin: psycopg.Connection[Any]
+) -> None:
+    owner = await sign_up(world)
+    venue = await make_venue(owner)
+    await ready_brief(world, admin, owner, venue)
+    admin.execute("UPDATE business SET type = 'cafe'")
+    open_all_week(admin)
+    set_rhythm(admin)
+    doc = await board(owner, venue)
+    assert doc["venue"]["music"] is False
+    kinds = [a["kind"] for a in doc["actions"]]
+    assert kinds[0] == "Aim something at a quiet stretch"
+    assert "Book an act" not in kinds  # a cafe is not asked to book a band
+    idea = doc["actions"][0]
+    assert idea["title"] == "Aim something at Wednesday afternoon"
+    assert idea["act"] is None and idea["fit"] is None  # no act, so no fit to show
+    assert idea["slot"] == {"weekdays": [2], "from": 14, "to": 17}
+    assert "Wednesday 14:00 to 17:00 is your quietest stretch" in idea["why"]
+    assert "% of the guests who answered" in idea["why"] and "picks " in idea["why"]
+    # only what the venue itself measured, and one line saying what is only a hypothesis
+    assert [e["label"] for e in idea["evidence"]] == ["measured", "measured", "modelled"]
+    assert "0 of 90 scans" in idea["evidence"][0]["text"]
+    assert "observed" not in json.dumps(idea["evidence"])  # nothing here is a claim from Qloo
+    assert idea["prov"][-1] == "Your guests' own picks"
+    # it can be accepted and logged as a move for its slot, and is not a source for drafts about an act
+    root = f"/v1/tenants/{owner.tenant_id}{base(owner, venue)}/today/actions/{idea['key']}"
+    assert (
+        await owner.client.put(root, json={"state": "accepted"}, headers=owner.headers)
+    ).status_code == 200
+    assert (await owner.client.post(f"{root}/log", headers=owner.headers)).json()["new"] is True
+    assert admin.execute("SELECT weekdays, hour_from, hour_to FROM move").fetchall() == [
+        ([2], 14, 17)
+    ]
+    drafts = (await owner.get(f"{base(owner, venue)}/drafts")).json()
+    assert all(a["key"] != idea["key"] for a in drafts["sources"]["actions"])
+
+
+async def test_without_groups_there_is_no_idea_and_a_music_room_with_two_act_actions_gets_no_third(
+    world: World, admin: psycopg.Connection[Any]
+) -> None:
+    owner = await sign_up(world)
+    venue = await make_venue(owner)
+    doc = await full_board(world, admin, owner, venue)
+    assert [a["kind"] for a in doc["actions"]] == ["Fill an empty chair", "Book an act"]
+    # a venue with scans but no fitted groups yet has nothing to build an idea from
+    other = await sign_up(world)
+    bare = await make_venue(other)
+    admin.execute("UPDATE business SET type = 'cafe' WHERE id = %s", (bare.business_id,))
+    admin.execute(
+        "UPDATE location SET hours = %s::jsonb WHERE business_id = %s",
+        (json.dumps(WEEK), bare.business_id),
+    )
+    assert (await board(other, bare))["actions"] == []

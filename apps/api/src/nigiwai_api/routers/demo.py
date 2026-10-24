@@ -21,7 +21,9 @@ from ..schemas import Strict
 from ..services import brief as brief_service
 from ..services import compare as compare_service
 from ..services import demo as demo_service
+from ..services import grow as grow_service
 from ..services import mapdata
+from ..services import sound as sound_service
 from ..services import soundcheck as service
 from ..services.brief_pdf import render
 from .public import limit
@@ -227,6 +229,35 @@ async def suggestions(slug: Slug, request: Request, state: State) -> dict[str, A
     if result.get("wildcard"):
         result["wildcard"] = {k: x for k, x in result["wildcard"].items() if k != "popularity"}
     return {**sug, "result": result}
+
+
+@router.get("/{slug}/sound")
+async def sound_plan(slug: Slug, request: Request, state: State) -> dict[str, Any]:
+    """The Sound plan for a demo venue, read from its stored suggestions. Makes no Qloo call."""
+    await limit(state, request, [READ])
+    v = await _venue(state, slug)
+    doc = await sound_service.build(state.engine, v["tenant_id"], v["business_id"])
+    if doc is None:
+        raise HTTPException(status_code=404, detail="not found")
+    return doc
+
+
+@router.get("/{slug}/grow")
+async def grow(slug: Slug, request: Request, state: State) -> dict[str, Any]:
+    """The last Grow run for a demo venue. A visitor cannot start one: it is rebuilt with the venue."""
+    await limit(state, request, [READ])
+    v = await _venue(state, slug)
+    return await grow_service.get(state.engine, v["tenant_id"], v["business_id"])
+
+
+@router.get("/{slug}/grow/calls")
+async def grow_calls(slug: Slug, request: Request, state: State) -> list[dict[str, Any]]:
+    await limit(state, request, [READ])
+    v = await _venue(state, slug)
+    got = await grow_service.calls(state.engine, v["tenant_id"], v["business_id"])
+    if got is None:
+        raise HTTPException(status_code=404, detail="There is no finished run yet.")
+    return got
 
 
 @router.get("/{slug}/map")

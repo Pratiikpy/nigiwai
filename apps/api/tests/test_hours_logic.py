@@ -126,3 +126,13 @@ def test_sparse_windows_find_the_stretch_closest_to_having_enough_scans() -> Non
     assert (
         h.sparse_windows(_grid({0: [9, 9, 9, 9, 9, 9, 9, 9]})) == []
     )  # nothing is sparse: no card
+
+
+def test_a_grid_built_from_counts_per_hour_equals_one_built_scan_by_scan() -> None:
+    mask = h.open_mask([{"open": "12:00", "close": "23:00"}] * 7)
+    one_by_one = (
+        [(2, 15)] * 3 + [(4, 19)] * 5 + [(4, 3)] * 2
+    )  # the last two fall outside opening hours
+    counted = [(2, 15, 3), (4, 19, 5), (4, 3, 2)]
+    assert h.scan_grid(counted, mask) == h.scan_grid(one_by_one, mask)
+    assert h.scan_grid([(2, 15, 3), (2, 15)], mask)[2][15] == 4  # forms mix

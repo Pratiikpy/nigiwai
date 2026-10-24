@@ -102,7 +102,7 @@ async function a11y(page: Page, label: string) {
   expect(result.violations.map((v) => `${label}: ${v.id} ${v.nodes.map((n) => n.html.slice(0, 120)).join(" | ")}`)).toEqual([]);
 }
 // A link prefetch cancelled by a click is reported by Chrome as "aborted"; it is not a failure.
-const prefetch = /requestfailed: GET \S+\?_rsc=\S+ net::ERR_ABORTED/;
+const prefetch = /requestfailed: GET \S+[?&]_rsc=\S+ net::ERR_ABORTED/;
 
 const question = (page: Page, field: string) => expect(page.getByTestId("question")).toHaveAttribute("data-field", field);
 const nav = (page: Page) => page.getByRole("navigation", { name: "Pages" });

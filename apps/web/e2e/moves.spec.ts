@@ -8,7 +8,7 @@ async function a11y(page: Page, label: string) {
   const result = await new AxeBuilder({ page }).analyze();
   expect(result.violations.map((v) => `${label}: ${v.id} ${v.nodes.map((n) => n.html.slice(0, 120)).join(" | ")}`)).toEqual([]);
 }
-const prefetch = /requestfailed: GET \S+\?_rsc=\S+ net::ERR_ABORTED/;
+const prefetch = /requestfailed: GET \S+[?&]_rsc=\S+ net::ERR_ABORTED/;
 
 test("moves: log a change, see scans in the same slot before and after with their uncertainty, change it, remove it", async ({ page, request }, info) => {
   test.setTimeout(150_000);

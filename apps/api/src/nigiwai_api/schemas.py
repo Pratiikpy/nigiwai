@@ -52,9 +52,17 @@ class Strict(BaseModel):
 
 # ---- auth -----------------------------------------------------------------------------------------------------
 class SignupIn(Strict):
+    """A new account either starts a business of its own (`business_name`) or joins one it was invited to (`invite_token`)."""
+
     email: EmailStr
     password: str = Field(min_length=1, max_length=200)
-    business_name: Name
+    business_name: Name | None = None
+    invite_token: (
+        Annotated[
+            str, StringConstraints(min_length=20, max_length=100, pattern=r"^[A-Za-z0-9_-]+$")
+        ]
+        | None
+    ) = None
 
 
 class LoginIn(Strict):
@@ -73,6 +81,8 @@ class MeOut(Strict):
     email: str
     csrf_token: str
     tenants: list[TenantOut]
+    # present only in the answer to signing up: the recovery code is shown once and never returned again
+    recovery_code: str | None = None
 
 
 # ---- business -------------------------------------------------------------------------------------------------

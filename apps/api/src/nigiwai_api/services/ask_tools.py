@@ -400,12 +400,21 @@ async def my_groups(run: Run, args: dict[str, Any]) -> dict[str, Any]:
     for g in basis.groups:
         run.known_names.add(g.label)
         run.known_names.update(g.seed_names)
+        favourites = []
+        for entity_id, name in basis.seed_pool.get(g.index, [])[:5]:
+            # the group's favourites are real Qloo entities the guests picked: the model may use them as seeds or list them
+            # (an act the crowd already loves can be the right one to book), as the owner's own measured data
+            run.seen.setdefault(
+                entity_id,
+                Seen(entity_id, name, "artist", "my_groups", "", [], f"a favourite of {g.label}"),
+            )
+            favourites.append({"id": entity_id, "name": name})
         groups.append(
             {
                 "label": g.label,
                 "share_pct": round(100 * g.share),
                 "size": round(g.size),
-                "favourites": list(g.seed_names)[:5],
+                "favourites": favourites,
             }
         )
     return {

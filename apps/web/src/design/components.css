@@ -239,6 +239,9 @@
 .tabs { display: flex; gap: var(--s-1); border-bottom: var(--bw-hair) solid var(--rule); }
 .tab { min-height: var(--hit); padding: 0 var(--s-4); background: none; border: 0; border-bottom: 3px solid transparent; margin-bottom: -1px; font-weight: var(--strong-weight); font-size: var(--t-sm); color: var(--ink-2); display: inline-flex; align-items: center; gap: 6px; }
 .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--brand); }
+/* A row of tabs wider than the screen scrolls inside itself; it never widens the page. */
+.tabs--scroll { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+.tabs--scroll .tab { flex: none; white-space: nowrap; }
 
 /* ---------- Bottom sheet / dialog ---------- */
 .scrim { position: absolute; inset: 0; background: var(--overlay); z-index: 40; opacity: 0; pointer-events: none; transition: opacity var(--dur-3) var(--ease-std); }

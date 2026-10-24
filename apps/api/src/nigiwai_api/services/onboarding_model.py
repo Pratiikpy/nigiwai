@@ -8,6 +8,7 @@ what a valid answer is, which are still needed, and which modules a profile swit
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal
@@ -553,6 +554,76 @@ def normalise(field_id: str, value: Any) -> Any:
             raise AnswerError("List up to 20 genres, each a few words.")
         return genres
     raise AnswerError("That is not something I asked about.")
+
+
+_DAY_NAMES = {
+    **{
+        name: i
+        for i, name in enumerate(
+            ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+        )
+    },
+    **{name: i for i, name in enumerate(("mon", "tue", "wed", "thu", "fri", "sat", "sun"))},
+    "tues": 1,
+    "thur": 3,
+    "thurs": 3,
+}
+
+
+def _key(text: str) -> str:
+    return re.sub(r"[\s_-]+", " ", text.strip().casefold())
+
+
+def coerce_model_value(field_id: str, value: Any) -> Any:
+    """What a language model wrote for a field, put into the form the checklist asks for, when that is unambiguous: a list or
+    object written as a JSON string, a goal or business kind given by its label, opening hours keyed by day name, weekdays given
+    by name. Anything it cannot make sense of is returned as it was, for `normalise` to refuse with a reason the model can act on.
+    The owner's own answers on the form never pass through here."""
+    if isinstance(value, str) and field_id in ("goals", "hours", "show_nights", "excluded_genres"):
+        text = value.strip()
+        if text[:1] in "[{":
+            try:
+                value = json.loads(text)
+            except ValueError:
+                return value
+    if field_id == "type" and isinstance(value, str):
+        wanted = _key(value)
+        for key, label in TYPE_LABELS.items():
+            if wanted in (_key(key), _key(label)):
+                return key
+        return value
+    if field_id == "goals":
+        items = value if isinstance(value, list) else [value]
+        mapped: list[Any] = []
+        for item in items:
+            if isinstance(item, str):
+                wanted = _key(item)
+                match = next(
+                    (k for k, label in GOALS.items() if wanted in (_key(k), _key(label))), None
+                )
+                mapped.append(match or item)
+            else:
+                mapped.append(item)
+        return mapped
+    if field_id == "hours":
+        if isinstance(value, dict):
+            week: list[Any] = [..., ..., ..., ..., ..., ..., ...]
+            for name, day in value.items():
+                index = _DAY_NAMES.get(_key(str(name)))
+                if index is None:
+                    return value
+                week[index] = day
+            if any(d is ... for d in week):
+                return value  # a day the model left out is not guessed to be closed
+            value = week
+        if isinstance(value, list):
+            return [
+                None if isinstance(d, str) and _key(d) in ("closed", "shut", "none", "") else d
+                for d in value
+            ]
+    if field_id == "show_nights" and isinstance(value, list):
+        return [_DAY_NAMES.get(_key(d), d) if isinstance(d, str) else d for d in value]
+    return value
 
 
 def build_profile(name: str, known: dict[str, Any], *, timezone: str | None = None) -> Profile:

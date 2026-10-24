@@ -7,6 +7,7 @@ caller labels them measured and says so.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -51,15 +52,21 @@ def open_mask(hours: list[dict[str, str] | None]) -> list[list[bool]]:
     return mask
 
 
-def scan_grid(scans: list[tuple[int, int]], mask: list[list[bool]]) -> list[list[int | None]]:
+def scan_grid(
+    scans: Sequence[tuple[int, int] | tuple[int, int, int]], mask: list[list[bool]]
+) -> list[list[int | None]]:
     """Scans per weekday and hour inside opening hours; None where the venue is closed. A scan outside opening hours
-    (a guest who answered the next morning, or a venue with no hours) is in no cell."""
+    (a guest who answered the next morning, or a venue with no hours) is in no cell. Each entry is (weekday, hour), or the same
+    with how many scans fell in that hour."""
     cells: list[list[int | None]] = [
         [0 if mask[d][h] else None for h in range(24)] for d in range(7)
     ]
-    for weekday, hour in scans:
+    for entry in scans:
+        weekday, hour = entry[0], entry[1]
         if 0 <= weekday < 7 and 0 <= hour < 24 and cells[weekday][hour] is not None:
-            cells[weekday][hour] = (cells[weekday][hour] or 0) + 1
+            cells[weekday][hour] = (cells[weekday][hour] or 0) + (
+                entry[2] if len(entry) == 3 else 1
+            )
     return cells
 
 

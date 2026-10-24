@@ -22,6 +22,8 @@ from ..security import (
     token_hash,
     verify_password,
 )
+from ..services import account as account_service
+from ..services import team as team_service
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
@@ -67,32 +69,46 @@ async def signup(body: SignupIn, request: Request, response: Response, state: St
         check_password_policy(body.password, email)
     except WeakPassword as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if (body.business_name is None) == (body.invite_token is None):
+        raise HTTPException(
+            status_code=422,
+            detail=[
+                {
+                    "field": "business_name",
+                    "message": "Give the name of your business, or sign up from an invitation link, not both.",
+                }
+            ],
+        )
     pw_hash = hash_password(body.password)
     user_id = uuid4()
+    code = account_service.new_recovery_code()
     try:
-        # The account and its tenant are created in one transaction, so a failure leaves nothing behind.
+        # The account and its tenant (or its place in the tenant it was invited to) are created in one transaction, so a failure
+        # leaves nothing behind.
         async with transaction(state.engine, user_id=user_id) as conn:
             await conn.execute(
-                text("INSERT INTO app_user (id, email, password_hash) VALUES (:i, :e, :p)"),
-                {"i": user_id, "e": email, "p": pw_hash},
+                text(
+                    "INSERT INTO app_user (id, email, password_hash, recovery_hash, recovery_set_at)"
+                    " VALUES (:i, :e, :p, :r, now())"
+                ),
+                {"i": user_id, "e": email, "p": pw_hash, "r": account_service.recovery_hash(code)},
             )
-            tenant_id = (
+            if body.invite_token is not None:
+                await team_service.accept_in(conn, user_id, body.invite_token)
+            else:
                 await conn.execute(
                     text("SELECT create_tenant(:n, :u)"), {"n": body.business_name, "u": user_id}
                 )
-            ).scalar_one()
+    except team_service.TeamError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
     except IntegrityError as exc:
         # Reported plainly: a duplicate address has to be fixable by the person who typed it.
         raise HTTPException(
             status_code=409, detail="an account with this email already exists"
         ) from exc
     csrf_secret = await _create_session(state, response, user_id)
-    return MeOut(
-        user_id=user_id,
-        email=email,
-        csrf_token=csrf_token(state.settings.secret_key, csrf_secret),
-        tenants=[TenantOut(id=tenant_id, name=body.business_name, role="owner")],
-    )
+    me = await _me(state, user_id, email, csrf_secret)
+    return me.model_copy(update={"recovery_code": code})
 
 
 @router.post("/login")

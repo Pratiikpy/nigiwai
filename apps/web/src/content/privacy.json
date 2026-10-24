@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-10-24",
+  "updated": "2026-10-25",
   "stored_per_answer": [
     { "what": "About five favourite things, chosen from a list (a kind and an identifier each, in the order chosen)", "table": "pick", "columns": ["entity_id", "entity_type", "position"] },
     { "what": "Optionally: an age range", "table": "response", "columns": ["age_band"] },
@@ -25,9 +25,10 @@
     "Qloo results describe aggregate taste. They are never used to infer anything about a person.",
     "Wording is about groups: “people who picked similar things also like”, never a prediction about you.",
     "Qloo's facts are shown separately from our own interpretation, labelled measured, observed or modelled.",
-    "A guest can delete their own answers at any time with the receipt code. An owner can delete their account and its data.",
+    "A guest can delete their own answers at any time with the receipt code. An owner can delete their account and everything in it from the Your login page, and anyone can delete their own login; both are immediate and nothing is kept.",
     "The Qloo key stays on our server. What reaches Qloo from a guest is the words typed in the search box and the item chosen, with nothing that links them to the guest's answers; Qloo may keep and reuse them under its own terms, and the consent text says so.",
     "A venue's own details (its name's kind, its position on the map) are sent to Qloo to find what is around it. They describe a business, not a person.",
+    "An owner's login is an email address, a hash of the password and a hash of the recovery code (never the password or the code themselves), and the sign-ins that are open. A password change or the recovery code signs every other device out.",
     "Only if an owner chooses to join the City Taste Atlas are counts of what their guests picked pooled with other venues in the same neighbourhood square (about a kilometre). The pooled table has no column for a venue, an account or a guest. A venue counts with 10 answers, a neighbourhood opens with 5 such venues, and an item is listed with 10 answers from at least 3 venues and only if no one venue supplied more than half of them. These minimums are enforced by the database. A venue can leave at any time, and its counts leave at the next rebuild."
   ]
 }

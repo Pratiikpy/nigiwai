@@ -12,6 +12,7 @@ season, the weather or a neighbour's event moves scans too, and a single before 
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any
@@ -60,12 +61,17 @@ def matching_days(start: date, end: date, slot: Slot, open_days: set[int] | None
     return n
 
 
-def _count(scans: list[tuple[date, int, int]], start: date, end: date, slot: Slot) -> int:
-    return sum(
-        1
-        for d, wd, hr in scans
-        if start <= d < end and slot.covers_day(wd) and slot.covers_hour(hr)
-    )
+# A scan is (day, weekday, hour), or the same with how many scans fell in that hour: the database sends one row per hour that had
+# scans, so the work does not grow with the number of guests.
+Scan = tuple[date, int, int] | tuple[date, int, int, int]
+
+
+def _count(scans: Sequence[Scan], start: date, end: date, slot: Slot) -> int:
+    total = 0
+    for s in scans:
+        if start <= s[0] < end and slot.covers_day(s[1]) and slot.covers_hour(s[2]):
+            total += s[3] if len(s) == 4 else 1
+    return total
 
 
 def periods(
@@ -118,7 +124,7 @@ def rate_ratio(n_before: int, e_before: int, n_after: int, e_after: int) -> dict
 
 
 def evaluate(
-    scans: list[tuple[date, int, int]],
+    scans: Sequence[Scan],
     slot: Slot,
     started: date,
     ended: date | None,

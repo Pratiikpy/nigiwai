@@ -104,7 +104,8 @@
 
 /* Day 0 */
 .day0 { display: grid; gap: var(--s-5); justify-items: start; padding: var(--s-7) var(--s-6); }
-@media (min-width: 900px) { .day0 { grid-template-columns: 220px 1fr; align-items: center; gap: var(--s-8); } }
+/* One column: the two-column form (an illustration beside the text) lost its illustration, and the text was left in the narrow first column. */
+.day0 > .stack { width: 100%; max-width: 64rem; }
 .day0__art { width: 150px; color: var(--ink); }
 @media (min-width: 900px) { .day0__art { width: 200px; } }
 .day0 h2 { font-size: var(--t-3xl); max-width: 16ch; }

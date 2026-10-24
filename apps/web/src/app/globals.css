@@ -66,23 +66,26 @@ fieldset.card > legend + * { clear: both; }
 [data-dir="a"] .shell .card { border: 2px solid var(--rule-strong); box-shadow: var(--e1); }
 [data-dir="a"] .shell .card--flat { box-shadow: none; }
 
-.steps { display: grid; gap: var(--s-3); counter-reset: step; }
-.steps li { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: var(--s-3); align-items: center; padding: var(--s-3) var(--s-4); background: var(--surface); border-radius: var(--card-r); }
-[data-dir="a"] .steps li { border: 2px solid var(--rule-strong); }
-.steps__n { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--rule-strong); font-family: var(--font-mono); font-weight: 500; }
-.steps li[data-done="true"] .steps__n { background: var(--ok); color: var(--surface); border-color: var(--ok); }
-.steps__t { display: grid; gap: 2px; min-width: 0; }
-.steps__t strong { overflow-wrap: anywhere; }
+/* The set-up steps on the overview. They have their own name: the Today page also has a `.steps` list and its rules would otherwise reach these. */
+.ov-steps { display: grid; gap: var(--s-3); }
+.ov-steps li { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: var(--s-3); align-items: center; padding: var(--s-3) var(--s-4); background: var(--surface); border-radius: var(--card-r); }
+[data-dir="a"] .ov-steps li { border: 2px solid var(--rule-strong); }
+.ov-steps__n { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--rule-strong); font-family: var(--font-mono); font-weight: 500; }
+.ov-steps li[data-done="true"] .ov-steps__n { background: var(--ok); color: var(--surface); border-color: var(--ok); }
+.ov-steps__t { display: grid; gap: 2px; min-width: 0; }
+.ov-steps__t strong { overflow-wrap: anywhere; }
 
-.stat-row { display: grid; gap: var(--s-4); grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-.stat { display: grid; gap: 2px; padding: var(--s-4); background: var(--surface); border-radius: var(--card-r); }
-[data-dir="a"] .stat { border: 2px solid var(--rule-strong); box-shadow: var(--e1); }
-.stat__n { font-family: var(--font-display); font-weight: var(--display-weight); font-size: var(--t-3xl); line-height: 1; font-variant-numeric: tabular-nums; }
+/* Response counts on the overview; named apart from the Today board's `.stat`, which has its own rules. */
+.ov-stat-row { display: grid; gap: var(--s-4); grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.ov-stat { display: grid; gap: 2px; padding: var(--s-4); background: var(--surface); border-radius: var(--card-r); }
+[data-dir="a"] .ov-stat { border: 2px solid var(--rule-strong); box-shadow: var(--e1); }
+.ov-stat__n { font-family: var(--font-display); font-weight: var(--display-weight); font-size: var(--t-3xl); line-height: 1; font-variant-numeric: tabular-nums; }
 
 .qr-list { display: grid; gap: var(--s-4); }
 .qr-item { display: grid; gap: var(--s-3); padding: var(--s-4); background: var(--surface); border-radius: var(--card-r); }
 [data-dir="a"] .qr-item { border: 2px solid var(--rule-strong); }
 .qr-item__top { display: flex; flex-wrap: wrap; gap: var(--s-3); justify-content: space-between; align-items: center; }
+.qr-item__top > div:first-child { display: grid; gap: 2px; min-width: 0; }
 .qr-item__url { font-family: var(--font-mono); font-size: var(--t-sm); overflow-wrap: anywhere; color: var(--ink-2); }
 .qr-item[data-status="revoked"] { opacity: 0.75; }
 .pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: var(--r-pill); font-size: var(--t-xs); font-weight: var(--strong-weight); background: var(--ok-soft); color: var(--ok); border: 2px solid currentColor; }
@@ -467,3 +470,33 @@ fieldset.card > legend + * { clear: both; }
 .at-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-3); }
 .at-list > li { display: grid; min-width: 0; overflow-wrap: anywhere; }
 .at-list__n { display: grid; gap: 2px; }
+
+/* ---------- Team and invitations ---------- */
+.tm-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); }
+.tm-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2) var(--s-4); padding: var(--s-3) 0; border-top: var(--bw-hair) solid var(--rule); min-width: 0; }
+.tm-list > .tm-row:first-child { border-top: 0; }
+.tm-who { display: grid; gap: 2px; min-width: 0; flex: 1 1 14rem; }
+.tm-who strong { overflow-wrap: anywhere; }
+.tm-acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.tm-select { width: auto; min-width: 9rem; }
+.tm-confirm { display: inline-flex; flex-wrap: wrap; gap: var(--s-2); }
+.pill-role { font-weight: var(--strong-weight); font-size: var(--t-sm); border: var(--bw-hair) solid var(--rule-strong); border-radius: var(--r-pill); padding: 2px 12px; }
+.tm-roles { display: grid; gap: var(--s-2); margin: 0; padding-top: var(--s-3); border-top: var(--bw-hair) solid var(--rule); font-size: var(--t-sm); }
+.tm-roles dt { font-weight: var(--strong-weight); }
+.tm-roles dd { margin: 0; color: var(--ink-2); }
+@media (min-width: 900px) { .tm-roles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.tm-make { display: grid; gap: var(--s-4); justify-items: start; max-width: 32rem; }
+.tm-make .field { width: 100%; }
+.tm-new { padding: var(--s-4); background: var(--accent-soft); border-radius: var(--card-r); }
+.tm-link { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.tm-link .input { flex: 1 1 16rem; min-width: 0; font-family: var(--font-mono); font-size: var(--t-sm); }
+.tm-done { align-self: flex-start; }
+.tm-sub { font-size: var(--t-md); font-weight: var(--strong-weight); margin-top: var(--s-2); }
+
+/* ---------- Account: recovery code, danger actions ---------- */
+.rc-code { font-family: var(--font-mono); font-size: var(--t-xl); font-weight: 500; letter-spacing: 0.08em; padding: var(--s-4); background: var(--accent-soft); border-radius: var(--card-r); margin: 0; overflow-wrap: anywhere; user-select: all; }
+.rc-input { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; }
+.btn--danger { border-color: var(--danger); color: var(--danger); background: var(--surface); }
+.btn--danger:hover:not(:disabled) { background: var(--danger-soft); }
+.tm-row > .disc { flex: 1 1 100%; }
+.btn--fit { align-self: flex-start; }

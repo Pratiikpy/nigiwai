@@ -13,7 +13,7 @@ function groupName(run: GrowRun, index: number): string {
   return run.groups.find((g) => g.index === index)?.label ?? `Group ${index + 1}`;
 }
 
-function Ghosts({ run }: { run: GrowRun }) {
+function Ghosts({ run, link }: { run: GrowRun; link: string }) {
   const g: GhostSection = run.ghosts;
   const who = WHO[g.unit];
   const byGroup = run.groups
@@ -61,7 +61,7 @@ function Ghosts({ run }: { run: GrowRun }) {
                             {n + 1}
                           </span>
                           <span className="snd-acts__b">
-                            <a className="snd-acts__name" href={`/app/soundcheck?q=${encodeURIComponent(a.name)}`}>
+                            <a className="snd-acts__name" href={`${link}?q=${encodeURIComponent(a.name)}`}>
                               {a.name}
                             </a>
                             <span className="meta">{a.genres.join(", ")}</span>
@@ -257,7 +257,7 @@ function Calls({ base }: { base: string }) {
 
 const WAITING = new Set(["queued", "running"]);
 
-export function GrowWorkspace({ base, canWrite }: { base: string; canWrite: boolean }) {
+export function GrowWorkspace({ base, canWrite, soundcheckLink = "/app/soundcheck" }: { base: string; canWrite: boolean; soundcheckLink?: string }) {
   const [doc, setDoc] = useState<GrowDoc | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
@@ -334,7 +334,7 @@ export function GrowWorkspace({ base, canWrite }: { base: string; canWrite: bool
               <span data-testid="stale">{doc.reason}</span>
             </Notice>
           ) : null}
-          <Ghosts run={run} />
+          <Ghosts run={run} link={soundcheckLink} />
           <PlacesPartView run={run} />
           <div className="row row--wrap">
             {showAsk ? (

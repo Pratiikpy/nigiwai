@@ -178,11 +178,16 @@ function ActionCard({
           <button className="btn" type="button" disabled={busy} onClick={() => onDecide(action.key, "dismissed")}>
             Not now
           </button>
-          <Link className="btn btn--ghost" href={`/app/soundcheck${action.act.soundcheck_id ? `?sc=${action.act.soundcheck_id}` : ""}`}>
-            <Icon name="bolt" />
-            Soundcheck this act
-          </Link>
-          <Link className="btn btn--ghost" href={`/app/ask?mode=crowd&q=${encodeURIComponent(`Would ${action.act.name} suit my crowd, and would it clash with anyone?`)}`}>
+          {action.act ? (
+            <Link className="btn btn--ghost" href={`/app/soundcheck${action.act.soundcheck_id ? `?sc=${action.act.soundcheck_id}` : ""}`}>
+              <Icon name="bolt" />
+              Soundcheck this act
+            </Link>
+          ) : null}
+          <Link
+            className="btn btn--ghost"
+            href={`/app/ask?mode=crowd&q=${encodeURIComponent(action.act ? `Would ${action.act.name} suit my crowd, and would it clash with anyone?` : "What could I offer in my quietest stretch that my biggest group would like?")}`}
+          >
             <Icon name="chat" />
             Ask Nigiwai about this
           </Link>

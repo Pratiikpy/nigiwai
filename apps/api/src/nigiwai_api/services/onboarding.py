@@ -28,11 +28,11 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 from ..db import transaction
 from . import onboarding_model as om
 from . import onboarding_prompt as prompt
-from .llm import LlmClient, LlmUnavailable
+from .llm import LlmUnavailable, ModelClient
 
 log = logging.getLogger("nigiwai.onboarding")
 
-MODEL_TURNS = 6
+MODEL_TURNS = 10  # a model that records one fact per turn needs a turn for each fact the owner gave
 WALL_SECONDS = 45.0
 OWNER_TEXT_MAX = 600
 QUESTION_MAX = 300
@@ -58,7 +58,7 @@ class OnboardingError(Exception):
 @dataclass
 class Deps:
     engine: AsyncEngine
-    llm: LlmClient | None
+    llm: ModelClient | None
     limiter: Any
     daily_limit: int
 
@@ -203,12 +203,17 @@ def _handle(s: Session, name: str, args: dict[str, Any]) -> tuple[dict[str, Any]
                 "error": "the quote is not in the owner's own words; quote exactly what they wrote"
             }, False
         try:
-            accepted = om.normalise(fid, args.get("value"))
+            accepted = om.normalise(fid, om.coerce_model_value(fid, args.get("value")))
         except om.AnswerError as exc:
             return {"error": str(exc)}, False
         _store(s, fid, accepted)
         _resolved(s, fid)
-        return {"recorded": fid}, False
+        left = om.remaining(s.known, skipped=set(s.skipped))
+        return {
+            "recorded": fid,
+            "still_to_learn": left,
+            "next": "If the owner's own words already answer any of these, record them now, one call each; ask only for what they did not say.",
+        }, False
     if name == "ask_owner":
         fid = args.get("field")
         words = args.get("text")

@@ -7,13 +7,19 @@
 .pubnav a { color: var(--ink); font-weight: var(--strong-weight); text-decoration: none; padding: 10px 2px; min-height: var(--hit); display: inline-flex; align-items: center; border-bottom: var(--bw) solid transparent; }
 .pubnav a:hover { border-bottom-color: var(--ink); }
 .pubnav a[aria-current="page"] { border-bottom-color: var(--brand); }
-.pubmain { max-width: 1180px; margin: 0 auto; width: 100%; padding: 0 var(--s-7) var(--s-10); display: grid; gap: var(--s-7); }
-.pubfoot { max-width: 1180px; margin: 0 auto; padding: var(--s-6) var(--s-7) var(--s-9); color: var(--ink-3); font-size: var(--t-sm); display: grid; gap: var(--s-2); }
+/* The footer stays at the bottom of the screen while a page is still loading, so it does not jump down when the content arrives. */
+.pubframe { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+.pub-loading { min-height: 100vh; min-height: 100svh; }
+.pubmain { flex: 1 0 auto; align-content: start; max-width: 1180px; margin: 0 auto; width: 100%; padding: 0 var(--s-7) var(--s-10); display: grid; gap: var(--s-7); }
+.pubfoot { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--s-6) var(--s-7) var(--s-9); color: var(--ink-3); font-size: var(--t-sm); display: grid; gap: var(--s-2); }
 
 /* ---------- Judge landing ---------- */
 .hero { display: grid; gap: var(--s-5); padding-top: var(--s-6); max-width: 62ch; }
 .hero h1 { font-family: var(--font-display); font-weight: var(--display-weight); letter-spacing: var(--display-track); line-height: var(--display-lh); font-size: clamp(2.25rem, 6vw, 4rem); text-wrap: balance; }
 .hero p { font-size: var(--t-lg); color: var(--ink-2); max-width: 54ch; }
+/* About the height of the cards that replace it, so what follows does not jump when they arrive: three across on a wide screen, stacked on a phone. */
+.venues-loading { min-height: 17rem; }
+@media (max-width: 760px) { .venues-loading { min-height: 51rem; } }
 .venues { display: grid; gap: var(--s-4); grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .vcard { display: grid; gap: var(--s-3); align-content: start; text-decoration: none; color: var(--ink); }
 .vcard h3 { font-family: var(--font-display); font-weight: var(--display-weight); font-size: var(--t-xl); line-height: 1.1; letter-spacing: var(--display-track); }

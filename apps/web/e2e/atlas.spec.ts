@@ -8,7 +8,7 @@ async function a11y(page: Page, label: string) {
   const result = await new AxeBuilder({ page }).analyze();
   expect(result.violations.map((v) => `${label}: ${v.id} ${v.nodes.map((n) => n.html.slice(0, 120)).join(" | ")}`)).toEqual([]);
 }
-const prefetch = /requestfailed: GET \S+\?_rsc=\S+ net::ERR_ABORTED/;
+const prefetch = /requestfailed: GET \S+[?&]_rsc=\S+ net::ERR_ABORTED/;
 
 test("atlas: a venue that has not joined sees what joining shares and an example under a banner, joins only after agreeing, waits, and can leave", async ({ page, request }, info) => {
   test.setTimeout(240_000);

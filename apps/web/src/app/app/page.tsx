@@ -70,13 +70,13 @@ export default function Overview() {
         </section>
       ) : null}
 
-      <ol className="steps" aria-label="Set-up steps">
+      <ol className="ov-steps" aria-label="Set-up steps">
         {steps.map((step, i) => (
           <li key={step.title} data-done={step.done}>
-            <span className="steps__n" aria-hidden="true">
+            <span className="ov-steps__n" aria-hidden="true">
               {step.done ? <Icon name="check" size="sm" /> : i + 1}
             </span>
-            <span className="steps__t">
+            <span className="ov-steps__t">
               <strong>
                 {step.title}
                 {step.done ? <span className="sr-only"> (done)</span> : null}
@@ -93,21 +93,21 @@ export default function Overview() {
       {stats ? (
         <section aria-labelledby="h-stats" className="stack">
           <h2 id="h-stats">Responses</h2>
-          <div className="stat-row">
-            <div className="stat">
-              <span className="stat__n" data-testid="stat-responses">
+          <div className="ov-stat-row">
+            <div className="ov-stat">
+              <span className="ov-stat__n" data-testid="stat-responses">
                 {stats.responses}
               </span>
               <span className="meta">Counted</span>
             </div>
-            <div className="stat">
-              <span className="stat__n" data-testid="stat-held">
+            <div className="ov-stat">
+              <span className="ov-stat__n" data-testid="stat-held">
                 {stats.held_for_review}
               </span>
               <span className="meta">Held for review</span>
             </div>
-            <div className="stat">
-              <span className="stat__n">{activeQr.length}</span>
+            <div className="ov-stat">
+              <span className="ov-stat__n">{activeQr.length}</span>
               <span className="meta">Active QR codes</span>
             </div>
           </div>

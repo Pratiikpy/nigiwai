@@ -45,6 +45,7 @@ def results_of(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
         json.loads(b["content"]) if b["content"].startswith(("{", "[")) else {"text": b["content"]}
         for b in last
+        if b.get("type") == "tool_result"
     ]
 
 
@@ -815,3 +816,160 @@ async def test_the_owners_answers_are_private_to_their_account(
     mine = await sign_up(world)
     assert (await mine.get(f"{base(owner, venue)}/ask/{answer_id}")).status_code == 404
     assert (await mine.get(f"/businesses/{uuid.uuid4()}/ask/{uuid.uuid4()}")).status_code == 404
+
+
+async def test_the_groups_favourites_come_with_ids_to_seed_a_search_and_may_be_listed_as_the_owners_own_measured_data(
+    world: World, admin: psycopg.Connection[Any]
+) -> None:
+    owner = await sign_up(world)
+    venue = await make_venue(owner)
+    await crowd(world, admin, owner, venue)
+    known_world(world, admin)
+    got: list[dict[str, Any]] = []
+    favourite: list[str] = []
+
+    def seed_a_search(messages: list[dict[str, Any]]) -> Blocks:
+        groups = results_of(messages)[0]
+        got.append(groups)
+        favourite.append(groups["groups"][0]["favourites"][0]["id"])
+        return [tool("related", type="artist", seeds=[favourite[0]], take=4)]
+
+    def finish(messages: list[dict[str, Any]]) -> Blocks:
+        got.append(results_of(messages)[0])
+        surfaced = got[-1]["items"][0]["id"]
+        return [
+            tool(
+                "answer",
+                verdict="Try these.",
+                items=[
+                    {"entity_id": favourite[0], "reason": "They already love it."},
+                    {"entity_id": surfaced, "reason": "Qloo links it to their favourites."},
+                ],
+                evidence=[{"label": "observed", "text": "Qloo returned neighbours."}],
+                what_would_change=[],
+            )
+        ]
+
+    model = ScriptedModel([tool("my_groups")], seed_a_search, finish)
+    evs, _ = await ask(world, owner, venue, model, "Who is like my crowd?", "crowd")
+    groups = got[0]
+    assert all(
+        isinstance(f["id"], str) and f["name"] for g in groups["groups"] for f in g["favourites"]
+    )
+    # no name lookup was needed: the seed came straight from the group
+    assert not [c for c in world.qloo.calls if c[0] == "/search"]
+    assert got[1]["items"], "the related call answered for a favourite used as a seed"
+    doc = answer_of(evs)
+    by_id = {i["entity_id"]: i for i in doc["items"]}
+    assert set(by_id) == {favourite[0], got[1]["items"][0]["id"]}
+    mine = by_id[favourite[0]]
+    assert (mine["provenance"], mine["label"]) == (
+        "yours",
+        "measured",
+    )  # the owner's own survey, counted
+    assert mine["detail"].startswith("a favourite of ")
+    assert by_id[got[1]["items"][0]["id"]]["provenance"] == "surfaced"
+    assert doc["rejected"] == [] and doc["kind"] == "model"
+
+
+async def test_a_model_running_out_of_turns_is_told_so_before_it_is_stopped(
+    world: World, admin: psycopg.Connection[Any]
+) -> None:
+    owner = await sign_up(world)
+    venue = await make_venue(owner)
+    known_world(world, admin)
+    seen_nudges: list[int] = []
+
+    def looking(messages: list[dict[str, Any]]) -> Blocks:
+        last = messages[-1]["content"]
+        texts = [b["text"] for b in last if isinstance(b, dict) and b.get("type") == "text"]
+        seen_nudges.append(len([t for t in texts if "turns left" in t]))
+        return [tool("resolve_entity", text="Quiet Act", type="artist")]
+
+    from nigiwai_api.services import ask as ask_service
+
+    model = ScriptedModel(
+        *([[tool("resolve_entity", text="Quiet Act", type="artist")]] + [looking] * 11)
+    )
+    evs, _ = await ask(world, owner, venue, model, "Keep looking.")
+    assert answer_of(evs)["kind"] == "template"  # it never answered, so it got the plain list
+    cut = ask_service.MAX_TURNS - 4  # the hint is added after the turn that leaves three
+    assert not any(seen_nudges[:cut])  # no hint while there is plenty of room
+    assert all(seen_nudges[cut:])  # and one on every turn near the end
+
+
+async def test_an_answer_that_lists_nothing_after_qloo_returned_things_is_sent_back_once_for_its_items(
+    world: World, admin: psycopg.Connection[Any]
+) -> None:
+    owner = await sign_up(world)
+    venue = await make_venue(owner)
+    quiet = known_world(world, admin)
+    told: list[dict[str, Any]] = []
+
+    def empty_first(messages: list[dict[str, Any]]) -> Blocks:
+        found = results_of(messages)[0]
+        told.append(found)
+        return [
+            tool("answer", verdict="Plenty to try.", items=[], evidence=[], what_would_change=[])
+        ]
+
+    def then_list(messages: list[dict[str, Any]]) -> Blocks:
+        told.append(results_of(messages)[0])
+        first = told[0]["items"][0]["id"]
+        return [
+            tool(
+                "answer",
+                verdict="Try these.",
+                items=[{"entity_id": first, "reason": "Qloo links it."}],
+                evidence=[{"label": "observed", "text": "Qloo returned neighbours."}],
+                what_would_change=[],
+            )
+        ]
+
+    model = ScriptedModel(
+        [tool("resolve_entity", text="Quiet Act", type="artist")],
+        lambda m: [tool("related", type="artist", seeds=[first_id(m)], take=4)],
+        empty_first,
+        then_list,
+    )
+    evs, _ = await ask(world, owner, venue, model, "Who is like Quiet Act?")
+    doc = answer_of(evs)
+    assert "listed no items" in told[1]["error"]  # the model was told what was missing
+    assert doc["kind"] == "model" and len(doc["items"]) == 1 and doc["verdict"] == "Try these."
+    assert quiet  # (the known world was built)
+
+
+async def test_a_second_empty_answer_is_accepted_not_asked_for_again_and_an_honest_nothing_is_not_pushed(
+    world: World, admin: psycopg.Connection[Any]
+) -> None:
+    owner = await sign_up(world)
+    venue = await make_venue(owner)
+    known_world(world, admin)
+    empty = tool(
+        "answer", verdict="Nothing I would recommend.", items=[], evidence=[], what_would_change=[]
+    )
+    stated = tool(
+        "answer",
+        verdict="Not enough to go on.",
+        items=[],
+        evidence=[],
+        what_would_change=[],
+        not_enough_data={
+            "reason": "Qloo has little on this.",
+            "unlock": ["Ask about a bigger act."],
+        },
+    )
+    seeded = [
+        [tool("resolve_entity", text="Quiet Act", type="artist")],
+        lambda m: [tool("related", type="artist", seeds=[first_id(m)], take=4)],
+    ]
+    twice = ScriptedModel(*seeded, [empty], [empty])
+    evs, _ = await ask(world, owner, venue, twice, "Anything?")
+    assert answer_of(evs)["kind"] == "model" and answer_of(evs)["items"] == []
+    assert len(twice.requests) == 4  # one repair request, then it was accepted
+    honest = ScriptedModel(*seeded, [stated])
+    evs, _ = await ask(world, owner, venue, honest, "Anything else?")
+    doc = answer_of(evs)
+    assert (
+        doc["not_enough_data"]["reason"] and len(honest.requests) == 3
+    )  # said plainly, so not sent back

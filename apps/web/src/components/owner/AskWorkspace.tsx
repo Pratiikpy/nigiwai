@@ -82,7 +82,7 @@ function AnswerCard({ answer, onTrace }: { answer: Answer; onTrace: (a: Answer) 
                   </p>
                   {it.reason ? <p className="ask-items__why">{it.reason}</p> : null}
                   <p className="meta">
-                    <Label kind="observed" /> {provenanceText(it.provenance)}
+                    <Label kind={it.provenance === "yours" ? "measured" : "observed"} /> {provenanceText(it.provenance)}
                   </p>
                 </div>
               </li>

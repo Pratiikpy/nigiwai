@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from ..db import transaction
 from . import hours as hrs
-from . import soundcheck
+from . import soundcheck, tribes
 
 HOURS_PICTURE_FROM = 10  # scans before the hours picture is drawn at all
 SPARSE_BELOW = 10  # a stretch with fewer scans than this cannot say who comes
@@ -72,13 +72,15 @@ def unlock_for(scans: int) -> dict[str, Any] | None:
 
 
 async def _scans(conn: Any, business_id: UUID) -> list[Any]:
+    """One row per day and hour that had scans, with how many: the size of the answer does not grow with the guests."""
     return list(
         (
             await conn.execute(
                 text(
-                    "SELECT r.local_weekday AS wd, r.local_hour AS hr, r.local_date AS day FROM response r"
+                    "SELECT r.local_weekday AS wd, r.local_hour AS hr, r.local_date AS day, count(*) AS n FROM response r"
                     " JOIN survey s ON s.id = r.survey_id AND s.version = r.survey_version"
                     " WHERE s.business_id = :b AND r.quality_flag = 'ok'"
+                    " GROUP BY r.local_weekday, r.local_hour, r.local_date"
                 ),
                 {"b": business_id},
             )
@@ -152,6 +154,75 @@ def _fill_action(
             "entity_id": act["entity_id"],
             "soundcheck_id": act.get("soundcheck_id"),
         },
+        "slot": {"weekdays": [window.weekday], "from": window.start, "to": window.end},
+    }
+
+
+async def _biggest_group(conn: Any, business_id: UUID) -> dict[str, Any] | None:
+    """The venue's biggest shown group with what its members pick most, from the stored groups. None until groups are shown."""
+    prev = await tribes.latest(conn, business_id)
+    if (
+        prev is None
+        or prev.state not in ("provisional", "named")
+        or not isinstance(prev.result, dict)
+    ):
+        return None
+    shown = [g for g in prev.result.get("tribes", []) if g.get("shown")]
+    if not shown:
+        return None
+    biggest = max(shown, key=lambda g: (float(g.get("share", 0)), -int(g.get("index", 0))))
+    names = [str(i["name"]) for i in biggest.get("top_items", []) if i.get("name")][:3]
+    if len(names) < 2:
+        return None
+    return {
+        "label": str(biggest.get("label") or "Your biggest group"),
+        "share": float(biggest.get("share", 0)),
+        "items": names,
+        "provisional": prev.state != "named",
+    }
+
+
+def _list_of(names: list[str]) -> str:
+    return " and ".join([", ".join(names[:-1]), names[-1]]) if len(names) > 1 else names[0]
+
+
+def _idea_action(window: hrs.Window, total: int, group: dict[str, Any]) -> dict[str, Any]:
+    """Something to aim at the quietest stretch, built only from the venue's own scans and its biggest group's own picks: no act,
+    no claim from Qloo. It is a hypothesis to try and log, which Moves can then check against the scans."""
+    when = hrs.describe(window)
+    pct = round(100 * group["share"])
+    picks = _list_of(group["items"])
+    return {
+        "key": f"idea:{window.weekday}:{window.start}",
+        "kind": "Aim something at a quiet stretch",
+        "icon": "clock",
+        "title": f"Aim something at {hrs.WEEKDAYS[window.weekday]} {daypart(window.start)}",
+        "why": (
+            f"{when} is your quietest stretch. {group['label']}, your biggest group ({pct}% of the guests who answered), picks {picks} most. "
+            "An offer, a menu item or a night built around what they already pick could give them a reason to come then."
+        ),
+        "evidence": [
+            _evidence(
+                "measured",
+                f"{window.scans} of {total} scans came on {when}, well below an average three-hour stretch.",
+                "Scans are guests who chose to answer, not a headcount.",
+            ),
+            _evidence(
+                "measured",
+                f"{group['label']} picked {picks} more than the rest of your crowd did.",
+                "Provisional: the groups are not yet stable enough to name."
+                if group["provisional"]
+                else None,
+            ),
+            _evidence(
+                "modelled",
+                "That building something around their picks would bring them in is a hypothesis, not a forecast.",
+                "Log it as a move and Nigiwai compares scans in the same stretch before and after.",
+            ),
+        ],
+        "fit": None,
+        "prov": [f"n = {total} scans", "Your guests' own picks"],
+        "act": None,
         "slot": {"weekdays": [window.weekday], "from": window.start, "to": window.end},
     }
 
@@ -256,6 +327,7 @@ async def build(
         if venue is None:
             return None
         scans = await _scans(conn, business_id)
+        group = await _biggest_group(conn, business_id)
         sug_row = (
             await conn.execute(
                 text(
@@ -272,12 +344,12 @@ async def build(
     week = week_of(local_now.date())
 
     music = venue.type in MUSIC_TYPES
-    total = len(scans)
+    total = sum(int(s.n) for s in scans)
     hours_set: list[dict[str, str] | None] = (
         list(venue.hours) if isinstance(venue.hours, list) else []
     )
     mask = hrs.open_mask(hours_set)
-    cells = hrs.scan_grid([(int(s.wd), int(s.hr)) for s in scans], mask)
+    cells = hrs.scan_grid([(int(s.wd), int(s.hr), int(s.n)) for s in scans], mask)
     drawn = hrs.span(mask)
     in_hours = sum(c or 0 for row in cells for c in row)
     quiet = hrs.quiet_windows(cells, in_hours)
@@ -332,10 +404,16 @@ async def build(
         else "Modelled from your guests' groups."
     )
     rest = [t for t in top if t["entity_id"] not in used]
-    if rest and basis.get("use") is not None:
+    if music and rest and basis.get("use") is not None:
         slot = _book_slot(busy, in_hours, [int(n) for n in (venue.nights or [])], lineup_weekday)
         if slot is not None:
             actions.append(_book_action(slot, book_note, rest[0], fit_of(rest[0])))
+    if quiet and group is not None and (not music or len(actions) < 2):
+        idea = _idea_action(quiet[0], in_hours, group)
+        if music:
+            actions.append(idea)
+        else:
+            actions.insert(0, idea)
 
     hold: dict[str, Any] | None = None
     if sparse:

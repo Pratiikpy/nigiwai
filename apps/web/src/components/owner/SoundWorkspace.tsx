@@ -8,7 +8,7 @@ import { ApiError, api } from "@/lib/api";
 import { type SoundAct, type SoundCell, type SoundPlan, planText } from "@/lib/sound";
 import type { Suggestions } from "@/lib/soundcheck";
 
-function Acts({ acts, empty }: { acts: SoundAct[]; empty: string }) {
+function Acts({ acts, empty, link }: { acts: SoundAct[]; empty: string; link: string }) {
   if (!acts.length) return <p className="meta">{empty}</p>;
   return (
     <ol className="snd-acts">
@@ -18,7 +18,7 @@ function Acts({ acts, empty }: { acts: SoundAct[]; empty: string }) {
             {i + 1}
           </span>
           <span className="snd-acts__b">
-            <a className="snd-acts__name" href={`/app/soundcheck?q=${encodeURIComponent(a.name)}`}>
+            <a className="snd-acts__name" href={`${link}?q=${encodeURIComponent(a.name)}`}>
               {a.name}
             </a>
             <span className="meta">
@@ -41,7 +41,7 @@ function Acts({ acts, empty }: { acts: SoundAct[]; empty: string }) {
   );
 }
 
-function Cell({ cell }: { cell: SoundCell }) {
+function Cell({ cell, link }: { cell: SoundCell; link: string }) {
   return (
     <article className="card snd-cell" data-testid="cell" data-key={cell.key} data-status={cell.status} aria-labelledby={`c-${cell.key}`}>
       <header className="snd-cell__head">
@@ -66,7 +66,7 @@ function Cell({ cell }: { cell: SoundCell }) {
                 .join(", ")}
             </span>
           </div>
-          <Acts acts={cell.acts} empty="No acts to name here." />
+          <Acts acts={cell.acts} empty="No acts to name here." link={link} />
         </>
       ) : (
         <p className="meta snd-cell__why">{cell.reason}</p>
@@ -75,7 +75,8 @@ function Cell({ cell }: { cell: SoundCell }) {
   );
 }
 
-export function SoundWorkspace({ base, canWrite }: { base: string; canWrite: boolean }) {
+/** `soundcheckLink` is where an act is checked: the owner's Soundcheck page, or a demo venue's own page. */
+export function SoundWorkspace({ base, canWrite, soundcheckLink = "/app/soundcheck" }: { base: string; canWrite: boolean; soundcheckLink?: string }) {
   const [doc, setDoc] = useState<SoundPlan | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
@@ -173,7 +174,7 @@ export function SoundWorkspace({ base, canWrite }: { base: string; canWrite: boo
                     {plan.cells
                       ?.filter((c) => c.days === days)
                       .map((c) => (
-                        <Cell key={c.key} cell={c} />
+                        <Cell key={c.key} cell={c} link={soundcheckLink} />
                       ))}
                   </div>
                 </section>
@@ -185,7 +186,7 @@ export function SoundWorkspace({ base, canWrite }: { base: string; canWrite: boo
               <h2 className="card__title" id="h-all">
                 Acts for your whole crowd
               </h2>
-              <Acts acts={plan.acts ?? []} empty="No acts to name yet." />
+              <Acts acts={plan.acts ?? []} empty="No acts to name yet." link={soundcheckLink} />
             </section>
           )}
           <div className="row row--wrap">

@@ -9,7 +9,7 @@ async function a11y(page: Page, label: string) {
   expect(result.violations.map((v) => `${label}: ${v.id} ${v.nodes.map((n) => n.html.slice(0, 120)).join(" | ")}`)).toEqual([]);
 }
 
-const prefetch = /requestfailed: GET \S+\?_rsc=\S+ net::ERR_ABORTED/;
+const prefetch = /requestfailed: GET \S+[?&]_rsc=\S+ net::ERR_ABORTED/;
 
 test("today: a new venue sees how to start, and the opening hours are set on Your venue", async ({ page, request }, info) => {
   const problems = watch(page);
@@ -22,6 +22,10 @@ test("today: a new venue sees how to start, and the opening hours are set on You
   await expect(page.getByTestId("scans")).toHaveText("0");
   await expect(page.getByText("Your first quiet-hours picture at 10 scans")).toBeVisible();
   await expect(page.getByTestId("actions")).toHaveCount(0);
+  // the layout, not only the words: the steps use the card's width (a leftover two-column rule once squeezed them into 220 px)
+  const box = await page.getByTestId("day0").locator("> .stack").boundingBox();
+  const card = await page.getByTestId("day0").boundingBox();
+  expect(box!.width).toBeGreaterThan(card!.width * 0.7);
   await shot(page, info, "today-day0");
   await a11y(page, "today day0");
   await setTheme(page, "dark");
@@ -177,5 +181,50 @@ test("today: without opening hours nothing is called quiet and the board asks fo
   await expect(page.getByTestId("quiet")).toHaveCount(0);
   await shot(page, info, "today-no-hours");
   await a11y(page, "today no hours");
+  expect(problems.filter((p) => !prefetch.test(p))).toEqual([]);
+});
+
+test("today: a cafe is offered an idea for its quietest stretch from its own scans and its biggest group's picks, with no act, and can log it as a move", async ({ page, request }, info) => {
+  test.setTimeout(240_000);
+  const problems = watch(page);
+  const venue = await publishedVenue(request);
+  await plantCrowd(venue.businessId, venue.qrId, 90);
+  await setRhythm(venue.qrId);
+  await openAllWeek(venue.businessId);
+  await sql("UPDATE business SET type = 'cafe' WHERE id = $1", [venue.businessId]);
+  await sql("UPDATE job SET run_after = now() WHERE business_id = $1", [venue.businessId]);
+  await expect
+    .poll(async () => (await sql("SELECT state FROM tribe_version WHERE business_id = $1 ORDER BY version DESC LIMIT 1", [venue.businessId])).rows[0]?.state, { timeout: 120_000 })
+    .toMatch(/provisional|named/);
+  await signIn(page, venue.email);
+  await page.goto("/app/today");
+
+  const actions = page.getByTestId("action");
+  await expect(actions).toHaveCount(1);
+  const idea = actions.first();
+  await expect(idea.getByRole("heading", { name: "Aim something at Wednesday afternoon" })).toBeVisible();
+  await expect(idea).toContainText("Wednesday 14:00 to 17:00 is your quietest stretch");
+  await expect(idea).toContainText("% of the guests who answered");
+  await expect(idea).toContainText("0 of 90 scans came on Wednesday 14:00 to 17:00");
+  await expect(idea).toContainText("a hypothesis, not a forecast");
+  const labels = await idea.getByLabel("Evidence").locator(".lbl__t").allInnerTexts();
+  expect(labels).toEqual(["Measured", "Measured", "Modelled"]);
+  await expect(idea.getByTestId("fit")).toHaveCount(0); // no act, so no fit to show
+  await expect(idea.getByRole("link", { name: "Soundcheck this act" })).toHaveCount(0);
+  await expect(idea.getByRole("link", { name: "Ask Nigiwai about this" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Book .* for/ })).toHaveCount(0);
+  await shot(page, info, "today-cafe");
+  await a11y(page, "today cafe");
+  await setTheme(page, "dark");
+  await shot(page, info, "today-cafe", "dark");
+  await a11y(page, "today cafe dark");
+  await setTheme(page, "light");
+
+  await idea.getByRole("button", { name: "Accept" }).click();
+  await expect(idea).toContainText("Accepted.");
+  await expect(idea.getByRole("link", { name: "Prepare drafts" })).toHaveCount(0); // drafts are about an act
+  await idea.getByRole("button", { name: "Log this move" }).click();
+  await expect(idea.getByRole("button", { name: "Logged as a move" })).toBeVisible();
+  expect((await sql("SELECT weekdays, hour_from, hour_to FROM move WHERE business_id = $1", [venue.businessId])).rows).toEqual([{ weekdays: [2], hour_from: 14, hour_to: 17 }]);
   expect(problems.filter((p) => !prefetch.test(p))).toEqual([]);
 });

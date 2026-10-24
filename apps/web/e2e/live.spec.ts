@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type APIRequestContext } from "@playwright/test";
-import { plantRealCrowds, publishedVenue, resetRateLimits, setTheme, shot, signIn, sql, watch } from "./helpers";
+import { plantRealCrowds, publishedVenue, resetRateLimits, setTheme, shot, signIn, signUp, sql, watch } from "./helpers";
 
 // Real Qloo, real picker, real card. Spends about a dozen calls of quota, so it only runs on request.
 test.skip(process.env.NIGIWAI_E2E_LIVE !== "1", "set NIGIWAI_E2E_LIVE=1 to spend Qloo quota");
@@ -300,5 +300,98 @@ test("grow reads a real crowd: a button press queues the worker, the page waits 
   await shot(page, info, "live-grow", "dark");
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await setTheme(page, "light");
+  expect(problems.filter((p) => !/_rsc=|ERR_ABORTED/.test(p))).toEqual([]);
+});
+
+// ---- the model-led features against a real model. The API must be started with a model configured (see the README, "Browser
+// tests with a real model"); with none, the assistant is not offered and these are skipped.
+async function modelConfigured(request: APIRequestContext): Promise<boolean> {
+  const me = await (await request.get("/api/v1/auth/me")).json();
+  const state = await (
+    await request.post(`/api/v1/tenants/${me.tenants[0].id}/onboarding`, { data: { mode: "auto", restart: true }, headers: { "x-csrf-token": me.csrf_token } })
+  ).json();
+  return state.agent_available === true;
+}
+
+test("onboarding with a real assistant: an owner writes a paragraph, the check shows what was understood, the rest is asked, and it is saved", async ({ page }, info) => {
+  test.setTimeout(300_000);
+  await resetRateLimits();
+  const problems = watch(page);
+  await signUp(page, "Account name");
+  await page.goto("/app/onboarding");
+  await page.getByTestId("start").click();
+  const box = page.getByLabel("Or tell me about it in your own words");
+  const offered = await box.waitFor({ state: "visible", timeout: 20_000 }).then(() => true, () => false);
+  test.skip(!offered, "no model is configured on this API");
+  await box.fill(
+    "The Cellar is a live music venue on the Lower East Side of New York. Gigs Thursday to Sunday, doors around 6pm until 1am. Room for 250. We take dollars. We book acts every week and want to book better ones.",
+  );
+  await page.getByRole("button", { name: "Send" }).click();
+  // a model that takes everything from the paragraph goes straight to the check; one that needs more asks, and the owner answers
+  const check = page.getByRole("heading", { name: "Here is what I understood", level: 1 });
+  for (let i = 0; i < 12; i++) {
+    const q = page.getByTestId("question");
+    await expect(check.or(q)).toBeVisible({ timeout: 120_000 });
+    if (await check.isVisible()) break;
+    await expect(page.getByText("Reading your answer…")).toBeHidden({ timeout: 120_000 });
+    const field = await q.getAttribute("data-field", { timeout: 5_000 }).catch(() => null);
+    if (field === null) continue; // the page moved on to the check while we looked
+    if (field === "goals") {
+      await page.getByRole("button", { name: "Book better acts" }).click();
+      await page.getByRole("button", { name: "Continue" }).click();
+    } else if (field === "hosts_live_music") {
+      await page.getByRole("button", { name: "Yes", exact: true }).click();
+    } else if (await page.getByTestId("skip").isVisible()) {
+      await expect(page.getByTestId("skip")).toBeEnabled();
+      await page.getByTestId("skip").click();
+    } else {
+      await page.getByRole("button", { name: "Continue" }).click();
+    }
+    await page.waitForTimeout(800);
+  }
+  await expect(check).toBeVisible({ timeout: 120_000 });
+  const understood = page.getByTestId("understood");
+  await expect(understood.locator('[data-field="type"] .onb-rows__v')).toHaveText("Live music venue");
+  await expect(understood.locator('[data-field="currency"] .onb-rows__v')).toHaveText("USD");
+  await expect(understood.locator('[data-field="area"] .onb-rows__v')).toContainText(/Lower East Side/i);
+  await shot(page, info, "live-onboarding-check");
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await setTheme(page, "dark");
+  await shot(page, info, "live-onboarding-check", "dark");
+  await setTheme(page, "light");
+  await page.getByLabel("Time zone").fill("America/New_York");
+  await page.getByTestId("confirm").click();
+  await expect(page.getByRole("heading", { name: "Saved", level: 1 })).toBeVisible({ timeout: 30_000 });
+  expect(problems.filter((p) => !/_rsc=|ERR_ABORTED/.test(p))).toEqual([]);
+});
+
+test("ask with a real model and real Qloo: a culture question is answered with items Qloo returned, and the trace shows the calls", async ({ page, request }, info) => {
+  test.setTimeout(300_000);
+  await resetRateLimits();
+  const problems = watch(page);
+  const venue = await publishedVenue(request);
+  expect(await modelConfigured(request)).toBe(true);
+  await signIn(page, venue.email);
+  await page.goto("/app/ask");
+  await page.getByRole("button", { name: "About the culture" }).click();
+  await page.getByLabel("Your question").fill("What films and TV shows do people who love Frank Sinatra also tend to love?");
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  const answer = page.getByTestId("answer");
+  await expect(answer).toBeVisible({ timeout: 180_000 });
+  const items = page.getByTestId("item");
+  expect(await items.count()).toBeGreaterThan(0);
+  for (const it of await items.all()) await expect(it).toHaveAttribute("data-provenance", /surfaced|confirmed/);
+  await expect(page.getByTestId("validator")).toContainText("each returned by a Qloo call during this question");
+  await shot(page, info, "live-ask-answer");
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await setTheme(page, "dark");
+  await shot(page, info, "live-ask-answer", "dark");
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await setTheme(page, "light");
+  await page.getByTestId("trace-button").click();
+  await expect(page.getByTestId("calls").locator("> li").first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("calls")).toContainText("/v2/insights");
+  const kind = (await sql("SELECT kind FROM ask_answer WHERE business_id = $1", [venue.businessId])).rows[0]?.kind;
+  expect(kind).toBe("model"); // written by the model, not the plain fallback
   expect(problems.filter((p) => !/_rsc=|ERR_ABORTED/.test(p))).toEqual([]);
 });

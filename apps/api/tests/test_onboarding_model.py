@@ -4,6 +4,7 @@ what each of them is."""
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -504,3 +505,58 @@ def test_moves_are_on_for_every_kind_of_business() -> None:
         assert moves.on, kind
         assert moves.available
         assert moves.reason.startswith("On because every business changes things.")
+
+
+# ------------------------------------------------------------------------------- what a model writes, made plain
+def test_a_models_json_text_labels_and_day_names_are_put_into_the_checklists_form() -> None:
+    c = om.coerce_model_value
+    assert c("goals", '["fill_quiet_hours", "know_crowd"]') == ["fill_quiet_hours", "know_crowd"]
+    assert c("goals", "Fill my quiet hours") == ["fill_quiet_hours"]
+    assert c("goals", ["fill quiet hours", "Understand who my customers are"]) == [
+        "fill_quiet_hours",
+        "know_crowd",
+    ]
+    assert c("goals", "nonsense") == ["nonsense"]  # refused later, with the reason, not guessed at
+    assert c("type", "Hotel bar or lounge") == "hotel_bar"
+    assert c("type", "Live Music Venue") == "live_music_venue"
+    assert c("type", "pub") == "pub"
+    week = {
+        d: {"open": "08:00", "close": "17:00"}
+        for d in ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+    }
+    week["Sunday"] = None  # type: ignore[assignment]
+    assert om.normalise("hours", c("hours", week))[6] is None
+    assert om.normalise("hours", c("hours", json.dumps(week)))[0] == {
+        "open": "08:00",
+        "close": "17:00",
+    }
+    short = {
+        "mon": {"open": "09:00", "close": "17:00"},
+        "tues": "closed",
+        "wed": "closed",
+        "thu": "closed",
+        "fri": "closed",
+        "sat": "closed",
+        "sun": "closed",
+    }
+    got = om.normalise("hours", c("hours", short))
+    assert got[0] == {"open": "09:00", "close": "17:00"} and got[1:] == [None] * 6
+    # a day the model left out is not guessed to be closed
+    missing = {d: {"open": "08:00", "close": "17:00"} for d in ("Monday", "Tuesday")}
+    with pytest.raises(om.AnswerError):
+        om.normalise("hours", c("hours", missing))
+    # an unknown day name, or text that is not JSON, is left for the validator to refuse
+    assert c("hours", {"someday": {"open": "08:00", "close": "17:00"}}) == {
+        "someday": {"open": "08:00", "close": "17:00"}
+    }
+    assert c("hours", "{not json") == "{not json"
+    assert c("show_nights", ["Friday", "sat"]) == [4, 5]
+    assert c("show_nights", "[3, 4]") == [3, 4]
+    assert c("currency", "gbp") == "gbp"  # untouched: normalise upper-cases it
+
+
+def test_what_the_owner_types_on_the_form_does_not_get_this_kindness() -> None:
+    with pytest.raises(om.AnswerError):
+        om.normalise("goals", '["fill_quiet_hours"]')
+    with pytest.raises(om.AnswerError):
+        om.normalise("type", "Hotel bar or lounge")

@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from .services import atlas, grow, lineup, soundcheck, tribes
 from .services import demo as demo_service
-from .services.llm import LlmClient
+from .services.llm import ModelClient
 
 log = logging.getLogger("nigiwai.worker")
 
@@ -38,7 +38,7 @@ ATLAS_EVERY = (
 class DemoRefresh:
     """What rebuilding a demo venue needs beyond the database, Qloo and MusicBrainz."""
 
-    llm: LlmClient | None
+    llm: ModelClient | None
     limiter: Any
     daily_limit: int
 
@@ -186,6 +186,9 @@ async def refresh_demo(
         else:
             rebuilt.append(slug)
             log.info("demo venue %s rebuilt", slug)
+    if guard is not None:
+        for business_id in await demo_service.missing_grow(engine):
+            await demo_service.refresh_grow(engine, guard, business_id)
     return rebuilt
 
 

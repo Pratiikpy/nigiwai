@@ -36,18 +36,21 @@ def _slot(row: Any) -> mm.Slot:
 
 async def _scans(
     conn: AsyncConnection, business_id: UUID, since: date
-) -> list[tuple[date, int, int]]:
+) -> list[tuple[date, int, int, int]]:
+    """Scans since a date as one row per hour that had any, with how many: the size of the answer is bounded by the days and
+    hours in the window, not by how many guests answered."""
     rows = (
         await conn.execute(
             text(
-                "SELECT r.local_date AS d, r.local_weekday AS wd, r.local_hour AS hr FROM response r"
+                "SELECT r.local_date AS d, r.local_weekday AS wd, r.local_hour AS hr, count(*) AS n FROM response r"
                 " JOIN survey s ON s.id = r.survey_id AND s.version = r.survey_version"
                 " WHERE s.business_id = :b AND r.quality_flag = 'ok' AND r.local_date >= :since"
+                " GROUP BY r.local_date, r.local_weekday, r.local_hour"
             ),
             {"b": business_id, "since": since},
         )
     ).all()
-    return [(r.d, int(r.wd), int(r.hr)) for r in rows]
+    return [(r.d, int(r.wd), int(r.hr), int(r.n)) for r in rows]
 
 
 async def _placed(

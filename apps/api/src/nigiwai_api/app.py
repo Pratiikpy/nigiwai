@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -23,6 +24,7 @@ from .db import assert_rls_effective, make_engine
 from .deps import AppState
 from .ratelimit import RateLimiter
 from .routers import (
+    account,
     ask,
     atlas,
     auth,
@@ -36,6 +38,7 @@ from .routers import (
     owner,
     public,
     soundcheck,
+    team,
     today,
     trust,
 )
@@ -160,10 +163,13 @@ async def build_state(
     musicbrainz = MusicBrainz(engine, settings.musicbrainz_url, settings.lineup_contact)
     limiter = RateLimiter(redis)
     llm = build_llm(
-        settings.anthropic_key_file,
+        settings.llm_key_file if settings.llm_provider == "openai" else settings.anthropic_key_file,
         settings.llm_model,
+        provider=settings.llm_provider,
         base_url=settings.llm_base_url,
         timeout=settings.llm_timeout_seconds,
+        workspace_id=settings.anthropic_workspace_id,
+        extra_body=json.loads(settings.llm_extra_body) if settings.llm_extra_body else None,
     )
     if settings.embedded_worker:
         from .worker import DemoRefresh, run_forever
@@ -281,6 +287,11 @@ def create_app(
     app.include_router(moves.router)
     app.include_router(grow.router)
     app.include_router(atlas.router)
+    app.include_router(team.router)
+    app.include_router(account.router)
+    app.include_router(account.tenant_router)
+    app.include_router(account.public)
+    app.include_router(team.public)
     app.include_router(drafts.router)
     app.include_router(trust.public)
     app.include_router(trust.owner)

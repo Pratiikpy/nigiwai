@@ -5,7 +5,9 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Label } from "@/components/Label";
 import { BriefWorkspace } from "@/components/owner/BriefWorkspace";
+import { GrowWorkspace } from "@/components/owner/GrowWorkspace";
 import { MapWorkspace } from "@/components/owner/MapWorkspace";
+import { SoundWorkspace } from "@/components/owner/SoundWorkspace";
 import { SoundcheckWorkspace } from "@/components/owner/SoundcheckWorkspace";
 import { Loading } from "@/components/owner/ui";
 import { ApiError, api } from "@/lib/api";
@@ -13,6 +15,8 @@ import { type DemoVenue, demoBase, matched, refreshedOn, years } from "@/lib/dem
 
 const VIEWS = [
   { id: "soundcheck", label: "Soundcheck" },
+  { id: "sound", label: "Sound plan" },
+  { id: "grow", label: "Grow" },
   { id: "map", label: "Crowd map" },
   { id: "brief", label: "Booking Brief" },
 ] as const;
@@ -22,7 +26,7 @@ function parseView(raw: string | null): View {
   return VIEWS.find((v) => v.id === raw)?.id ?? "soundcheck";
 }
 
-/** One demo venue: the same three workspaces an owner has, pointed at the venue's public routes. */
+/** One demo venue: the same workspaces an owner has, pointed at the venue's public routes. */
 export function TryVenue({ slug }: { slug: string }) {
   const router = useRouter();
   const path = usePathname();
@@ -68,6 +72,7 @@ export function TryVenue({ slug }: { slug: string }) {
     e.preventDefault();
     go(target.id);
     tabs.current[to]?.focus();
+    tabs.current[to]?.scrollIntoView({ inline: "nearest", block: "nearest" });
   }
 
   if (problem) {
@@ -85,7 +90,13 @@ export function TryVenue({ slug }: { slug: string }) {
       </section>
     );
   }
-  if (!venue) return <Loading label="Opening the venue…" />;
+  // Tall enough that the footer starts below the fold: when the venue arrives it then has nothing visible to push down.
+  if (!venue)
+    return (
+      <div className="pub-loading">
+        <Loading label="Opening the venue…" />
+      </div>
+    );
 
   const s = venue.summary;
   const since = refreshedOn(venue.refreshed_at);
@@ -108,8 +119,8 @@ export function TryVenue({ slug }: { slug: string }) {
         </div>
       </section>
 
-      <div>
-        <div className="tabs" role="tablist" aria-label="What to look at">
+      <div style={{ minWidth: 0 }}>
+        <div className="tabs tabs--scroll" role="tablist" aria-label="What to look at">
           {VIEWS.map((v, i) => (
             <button
               key={v.id}
@@ -130,8 +141,10 @@ export function TryVenue({ slug }: { slug: string }) {
             </button>
           ))}
         </div>
-        <div role="tabpanel" id={`panel-${view}`} aria-labelledby={`tab-${view}`} tabIndex={0} style={{ paddingTop: "var(--s-5)", display: "grid", gap: "var(--s-5)" }}>
+        <div role="tabpanel" id={`panel-${view}`} aria-labelledby={`tab-${view}`} tabIndex={0} style={{ paddingTop: "var(--s-5)", display: "grid", gap: "var(--s-5)", alignContent: "start", minHeight: "80svh" }}>
           {view === "soundcheck" ? <SoundcheckWorkspace base={base} canWrite={false} demo /> : null}
+          {view === "sound" ? <SoundWorkspace base={base} canWrite={false} soundcheckLink={`/try/${slug}`} /> : null}
+          {view === "grow" ? <GrowWorkspace base={base} canWrite={false} soundcheckLink={`/try/${slug}`} /> : null}
           {view === "map" ? <MapWorkspace base={base} demo /> : null}
           {view === "brief" ? <BriefWorkspace base={base} canWrite={false} demo /> : null}
         </div>

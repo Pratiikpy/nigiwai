@@ -113,7 +113,7 @@ async function a11y(page: Page, label: string) {
 }
 // Chrome reports a link prefetch cancelled by a click, and a finished event-stream request when the page is reloaded,
 // as "aborted". Neither is a failure: the stream has ended by then (the next question is asked from the same page).
-const prefetch = /requestfailed: (GET \S+\?_rsc=\S+|POST \S+\/ask) net::ERR_ABORTED/;
+const prefetch = /requestfailed: (GET \S+[?&]_rsc=\S+|POST \S+\/ask) net::ERR_ABORTED/;
 
 test("ask: a question streams its steps, then an answer with only what Qloo returned, and the trace opens", async ({ page, request }, info) => {
   test.setTimeout(150_000);

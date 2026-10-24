@@ -20,6 +20,15 @@ test("an owner sets up a venue, publishes a survey and prints a poster", async (
   await expect(page.getByRole("heading", { name: "The Lantern", level: 1 })).toBeVisible();
   const steps = page.getByRole("list", { name: "Set-up steps" }).getByRole("listitem");
   await expect(steps).toHaveCount(3);
+  // the layout, not only the count: one number per step and a text column wide enough to read (a rule from another page once
+  // squeezed these to a word a line and drew a second number, and nothing here noticed)
+  const laid = await steps.evaluateAll((els) =>
+    els.map((el) => ({ text: (el.querySelector(".ov-steps__t") as HTMLElement).getBoundingClientRect().width, before: getComputedStyle(el, "::before").content })),
+  );
+  for (const step of laid) {
+    expect(step.before).toBe("none");
+    expect(step.text).toBeGreaterThan(140);
+  }
   await shot(page, info, "overview-empty");
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 
@@ -65,7 +74,7 @@ test("an owner sets up a venue, publishes a survey and prints a poster", async (
 
   // Back to the overview: all three steps done.
   await nav(page, "Overview");
-  await expect(page.locator(".steps li[data-done='true']")).toHaveCount(3);
+  await expect(page.locator(".ov-steps li[data-done='true']")).toHaveCount(3);
   await shot(page, info, "overview-done");
 
   await setTheme(page, "dark");

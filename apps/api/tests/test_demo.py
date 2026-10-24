@@ -709,3 +709,93 @@ def test_every_demo_venue_has_a_usable_spec() -> None:
     for s in demo_service.SPECS:
         assert s.query and s.area_hint and s.city and s.blurb
         assert s.timezone.startswith(("America/", "Europe/"))
+
+
+async def test_a_visitor_can_read_a_demo_venues_sound_plan_and_grow_run_but_cannot_start_one(
+    world: World, admin: psycopg.Connection[Any]
+) -> None:
+    from nigiwai_api.services import grow as grow_service
+
+    business_id = plant_demo(admin, world)
+    await suggest(admin, world, business_id)
+    anon = world.client()
+    # before any run, Grow says so and offers nothing to start
+    first = (await anon.get(f"{API}/{SPEC.slug}/grow")).json()
+    assert first["state"] == "not_run" and first["run"] is None
+    assert (await anon.get(f"{API}/{SPEC.slug}/grow/calls")).status_code == 404
+
+    st = state_of(world)
+    await grow_service.run_job(st.engine, st.guard, DEMO, business_id)
+    sound = await anon.get(f"{API}/{SPEC.slug}/sound")
+    grow = await anon.get(f"{API}/{SPEC.slug}/grow")
+    calls = await anon.get(f"{API}/{SPEC.slug}/grow/calls")
+    assert sound.status_code == grow.status_code == calls.status_code == 200
+    assert sound.json()["state"] == "ready" and sound.json()["kind"] == "undated"
+    run = grow.json()
+    assert run["state"] == "ready" and run["run"]["basis"]["kind"] == "lineup"
+    assert run["run"]["ghosts"]["unit"] == "acts"
+    assert calls.json() and all(c["purpose"] in ("board", "lineup") for c in calls.json())
+    blob = strings([sound.json(), grow.json(), calls.json()])
+    assert str(DEMO) not in blob and str(business_id) not in blob
+    # a visitor cannot start a run, and an unknown or malformed venue is refused
+    assert (await anon.post(f"{API}/{SPEC.slug}/grow")).status_code in (404, 405)
+    assert (await anon.get(f"{API}/no-such-room/grow")).status_code == 404
+    assert (await anon.get(f"{API}/NOT A SLUG/sound")).status_code == 422
+
+
+async def test_a_demo_build_runs_grow_and_a_failure_there_neither_fails_the_build_nor_removes_the_last_run(
+    make_world: Any, admin: psycopg.Connection[Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from nigiwai_api.services import grow as grow_service
+
+    async with make_world(musicbrainz_url=MB) as world:
+        three_scenes(world, range(30))
+        neighbours(admin, world)
+
+        async def rebuild() -> None:
+            with respx.mock(assert_all_called=False) as router:
+                mock_place(router)
+                router.get(f"{MB}/event").mock(
+                    return_value=httpx.Response(200, json=events_body(30, 30))
+                )
+                await build(world)
+
+        await rebuild()
+        assert admin.execute("SELECT status FROM grow_run").fetchone() == ("ready",)
+        before = admin.execute("SELECT result FROM grow_run").fetchone()
+
+        async def broken(*_a: Any, **_k: Any) -> None:
+            raise RuntimeError("Qloo fell over")
+
+        monkeypatch.setattr(grow_service, "run_job", broken)
+        await rebuild()
+        assert admin.execute("SELECT status FROM demo_venue").fetchone() == ("ready",)
+        assert admin.execute("SELECT status FROM grow_run").fetchone() == ("ready",)
+        assert admin.execute("SELECT result FROM grow_run").fetchone() == before
+
+        async def half_done(engine: Any, guard: Any, tenant_id: Any, business_id: Any) -> None:
+            admin.execute("UPDATE grow_run SET status = 'running', result = NULL")
+
+        monkeypatch.setattr(grow_service, "run_job", half_done)
+        await rebuild()
+        assert admin.execute("SELECT status FROM grow_run").fetchone() == (
+            "ready",
+        )  # the earlier run is put back
+        assert admin.execute("SELECT result FROM grow_run").fetchone() == before
+
+
+async def test_a_ready_demo_venue_built_before_grow_existed_gets_a_run_on_the_next_look_without_a_rebuild(
+    world: World, admin: psycopg.Connection[Any]
+) -> None:
+    business_id = plant_demo(admin, world)
+    await suggest(admin, world, business_id)
+    st = state_of(world)
+    refresh = worker.DemoRefresh(None, st.limiter, 100)
+    assert admin.execute("SELECT count(*) FROM grow_run").fetchone() == (0,)
+    assert (
+        await worker.refresh_demo(st.engine, st.guard, st.musicbrainz, refresh) == []
+    )  # nothing was rebuilt
+    assert admin.execute("SELECT status FROM grow_run").fetchone() == ("ready",)
+    calls = len(world.qloo.calls)
+    assert await worker.refresh_demo(st.engine, st.guard, st.musicbrainz, refresh) == []
+    assert len(world.qloo.calls) == calls  # a venue that has a run is left alone

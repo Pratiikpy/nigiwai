@@ -7,13 +7,37 @@ import { ApiError, api, setCsrf, type Me, type Tenant } from "./api";
 type SessionState =
   | { status: "loading" }
   | { status: "error"; message: string }
+  /** Signed in, but not in any account (for example after being removed from the only one). */
+  | { status: "none"; me: Me }
   | { status: "ready"; me: Me; tenant: Tenant };
+
+const CHOICE_KEY = "nigiwai.account";
+
+/** The account this browser last worked in. A convenience only: when it is missing or stale the first account is used. */
+function remembered(): string | null {
+  try {
+    return window.localStorage.getItem(CHOICE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** Remember the account to open next time, for this browser only. */
+export function rememberAccount(id: string): void {
+  try {
+    window.localStorage.setItem(CHOICE_KEY, id);
+  } catch {
+    /* storage can be blocked: the first account opens instead */
+  }
+}
 
 type Session = {
   state: SessionState;
   signOut: () => Promise<void>;
   /** Replace the signed-in user's details after signing in or up. */
   adopt: (me: Me) => void;
+  /** Work in another account the person belongs to. The whole workspace is rebuilt for it, so nothing from the last account stays on screen. */
+  switchAccount: (id: string) => void;
 };
 
 const Ctx = createContext<Session | null>(null);
@@ -25,8 +49,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const adopt = useCallback((me: Me) => {
     setCsrf(me.csrf_token);
-    const tenant = me.tenants[0];
-    if (!tenant) setState({ status: "error", message: "This account has no venue." });
+    const wanted = remembered();
+    const tenant = me.tenants.find((t) => t.id === wanted) ?? me.tenants[0];
+    if (!tenant) setState({ status: "none", me });
     else setState({ status: "ready", me, tenant });
   }, []);
 
@@ -53,7 +78,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }
   }, [router]);
 
-  const value = useMemo(() => ({ state, signOut, adopt }), [state, signOut, adopt]);
+  const switchAccount = useCallback(
+    (id: string) => {
+      rememberAccount(id);
+      setState((s) => {
+        if (s.status !== "ready") return s;
+        const tenant = s.me.tenants.find((t) => t.id === id);
+        return tenant ? { status: "ready", me: s.me, tenant } : s;
+      });
+      router.push("/app");
+    },
+    [router],
+  );
+
+  const value = useMemo(() => ({ state, signOut, adopt, switchAccount }), [state, signOut, adopt, switchAccount]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

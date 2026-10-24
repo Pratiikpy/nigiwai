@@ -8,7 +8,7 @@ async function a11y(page: Page, label: string) {
   const result = await new AxeBuilder({ page }).analyze();
   expect(result.violations.map((v) => `${label}: ${v.id} ${v.nodes.map((n) => n.html.slice(0, 120)).join(" | ")}`)).toEqual([]);
 }
-const prefetch = /requestfailed: GET \S+\?_rsc=\S+ net::ERR_ABORTED/;
+const prefetch = /requestfailed: GET \S+[?&]_rsc=\S+ net::ERR_ABORTED/;
 
 async function fitted(businessId: string): Promise<void> {
   await sql("UPDATE job SET run_after = now() WHERE business_id = $1", [businessId]);

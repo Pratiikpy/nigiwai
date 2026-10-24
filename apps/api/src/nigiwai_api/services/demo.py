@@ -20,8 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from ..db import transaction
 from . import compare as compare_service
-from . import lineup, mapdata, soundcheck
-from .llm import LlmClient
+from . import grow, lineup, mapdata, soundcheck
+from .llm import ModelClient
 
 log = logging.getLogger("nigiwai.demo")
 
@@ -228,11 +228,44 @@ async def _mark(engine: AsyncEngine, slug: str, status: str | None, error: str |
             )
 
 
+async def refresh_grow(engine: AsyncEngine, guard: QlooGuard, business_id: UUID) -> None:
+    """Grow for a demo venue is a stored result like its suggestions. Anything that goes wrong here must not fail the venue's
+    build, and an earlier finished run stays in place if this one does not finish."""
+    read = (
+        "SELECT status, basis_kind, basis_ref, result, error FROM grow_run WHERE business_id = :b"
+    )
+    async with transaction(engine, tenant_id=DEMO_TENANT_ID) as conn:
+        before = (await conn.execute(text(read), {"b": business_id})).first()
+    try:
+        await grow.run_job(engine, guard, DEMO_TENANT_ID, business_id)
+    except Exception:
+        log.exception("grow could not be run for demo venue %s", business_id)
+    async with transaction(engine, tenant_id=DEMO_TENANT_ID) as conn:
+        after = (await conn.execute(text(read), {"b": business_id})).first()
+        if (
+            (after is None or after.status != "ready")
+            and before is not None
+            and before.status == "ready"
+        ):
+            await conn.execute(
+                text(
+                    "UPDATE grow_run SET status = 'ready', basis_kind = :k, basis_ref = :r, result = CAST(:d AS jsonb),"
+                    " error = NULL, updated_at = now() WHERE business_id = :b"
+                ),
+                {
+                    "b": business_id,
+                    "k": before.basis_kind,
+                    "r": before.basis_ref,
+                    "d": json.dumps(before.result),
+                },
+            )
+
+
 async def build_venue(
     engine: AsyncEngine,
     guard: QlooGuard | None,
     mb: lineup.MusicBrainz,
-    llm: LlmClient | None,
+    llm: ModelClient | None,
     limiter: Any,
     daily_limit: int,
     spec: Spec,
@@ -302,6 +335,7 @@ async def build_venue(
                 UUID(s["soundcheck_id"]),
             )
         await mapdata.around_for(engine, guard, DEMO_TENANT_ID, business_id)
+        await refresh_grow(engine, guard, business_id)
         # Old checks go (visitors' own, and earlier builds'), but never one the current suggestions point at: a stored
         # check is reused when its inputs are unchanged, so a suggested act's check can be older than the window.
         keep = [UUID(s["soundcheck_id"]) for s in suggested]
@@ -349,7 +383,7 @@ async def seed(
     engine: AsyncEngine,
     guard: QlooGuard | None,
     mb: lineup.MusicBrainz,
-    llm: LlmClient | None,
+    llm: ModelClient | None,
     limiter: Any,
     daily_limit: int,
     only: str | None = None,
@@ -415,6 +449,28 @@ async def listing(engine: AsyncEngine) -> list[dict[str, Any]]:
         }
         for r in rows
     ]
+
+
+async def missing_grow(engine: AsyncEngine) -> list[UUID]:
+    """Business ids of ready demo venues with no finished Grow run: venues built before Grow existed pick it up on the next look,
+    without a full rebuild."""
+    async with engine.connect() as conn:
+        venues = (
+            await conn.execute(text("SELECT business_id FROM demo_venue WHERE status = 'ready'"))
+        ).all()
+    lacking: list[UUID] = []
+    for v in venues:
+        business_id = UUID(str(v.business_id))
+        async with transaction(engine, tenant_id=DEMO_TENANT_ID) as conn:
+            done = (
+                await conn.execute(
+                    text("SELECT 1 FROM grow_run WHERE business_id = :b AND status = 'ready'"),
+                    {"b": business_id},
+                )
+            ).first()
+        if done is None:
+            lacking.append(business_id)
+    return lacking
 
 
 async def due_for_rebuild(engine: AsyncEngine) -> list[str]:

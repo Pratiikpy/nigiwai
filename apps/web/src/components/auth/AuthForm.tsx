@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Logo } from "@/components/Logo";
+import { RecoveryCode } from "@/components/auth/RecoveryCode";
 import { ApiError, api, setCsrf, type Me } from "@/lib/api";
 
 type Mode = "login" | "signup";
@@ -18,6 +19,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [recovery, setRecovery] = useState<string | null>(null);
   const signup = mode === "signup";
 
   const submit = async (event: React.FormEvent) => {
@@ -31,6 +33,11 @@ export function AuthForm({ mode }: { mode: Mode }) {
         body: signup ? { email, password, business_name: business } : { email, password },
       });
       setCsrf(me.csrf_token);
+      if (me.recovery_code) {
+        setRecovery(me.recovery_code); // shown once, before going on
+        setBusy(false);
+        return;
+      }
       router.replace("/app");
     } catch (e) {
       setError(e instanceof ApiError ? e.detail : "Something went wrong. Please try again.");
@@ -42,6 +49,10 @@ export function AuthForm({ mode }: { mode: Mode }) {
     <main className="auth" id="main">
       <div className="auth__card card">
         <Logo />
+        {recovery ? (
+          <RecoveryCode code={recovery} email={email} heading="Your account is ready" onDone={() => router.replace("/app")} />
+        ) : (
+          <>
         <div>
           <h1 className="display">{signup ? "Create your account" : "Welcome back"}</h1>
           <p className="muted" style={{ marginTop: "var(--s-2)" }}>
@@ -111,6 +122,13 @@ export function AuthForm({ mode }: { mode: Mode }) {
             {busy ? "One moment…" : signup ? "Create account" : "Sign in"}
           </button>
         </form>
+        {signup ? null : (
+          <p className="auth__alt">
+            <Link href="/forgot" data-testid="forgot-link">
+              Forgot your password?
+            </Link>
+          </p>
+        )}
         <p className="auth__alt">
           {signup ? (
             <>
@@ -122,6 +140,8 @@ export function AuthForm({ mode }: { mode: Mode }) {
             </>
           )}
         </p>
+          </>
+        )}
       </div>
     </main>
   );

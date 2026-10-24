@@ -38,6 +38,9 @@ test("privacy: what is stored, what is never collected, and the rules; the waitl
   await expect(page.getByTestId("stored").getByRole("listitem")).toHaveCount(10);
   await expect(page.getByTestId("never")).toContainText("The phone's location, or the guest's IP address");
   await expect(page.getByText("Groups under 10 people are never shown to an owner.")).toBeVisible();
+  // the promise about deleting is the one the product keeps: the account page exists and does what this sentence says
+  await expect(page.getByText("An owner can delete their account and everything in it from the Your login page")).toBeVisible();
+  await expect(page.getByText("a hash of the recovery code (never the password or the code themselves)")).toBeVisible();
   await expect(page.getByText("Separate from the guest survey: the owner waitlist")).toBeVisible();
   await shot(page, info, "privacy");
   await a11y(page, "privacy");

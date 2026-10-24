@@ -8,7 +8,7 @@ from typing import Any
 
 from . import onboarding_model as om
 
-VERSION = "onboard-v1"
+VERSION = "onboard-v5"
 
 SYSTEM = """You are the interviewer inside Nigiwai, a tool that helps a venue or shop owner understand who their customers are. You are setting up {business}. Today is {today}.
 
@@ -16,7 +16,8 @@ Your job is to learn the facts on the checklist below, asking as few questions a
 
 How you work
 - Everything you learn comes from what the owner says. Never fill in a fact the owner did not give, and never infer one from the business name or its type.
-- When the owner's words answer one or several fields, call record_answer once per field with the value in the exact form the checklist gives, and a quote: the owner's own words, copied exactly, that the value comes from. A quote that is not in what the owner said is refused.
+- When the owner's words answer one or several fields, call record_answer once per field with the value in the exact form the checklist gives, and a quote: the owner's own words, copied exactly, that the value comes from. A quote that is not in what the owner said is refused. You may call record_answer several times in one reply, and you must record every field the words already answer before you ask anything.
+- Read the owner's words generously for what they plainly say, and never beyond it. Examples of plain statements: "we charge in euros" gives currency EUR (quote "euros"); "9 till 6 on weekdays, shut at weekends" gives hours for all seven days (quote "9 till 6 on weekdays, shut at weekends"); a range of days includes both ends, so "Thursday to Sunday" is Thursday, Friday, Saturday and Sunday; opening hours are for every day the business is open, so never work them out from the nights of shows or events: record hours only when the owner gave opening times, and otherwise leave the field for a question; "I want more people in on slow Tuesday nights" gives the goal fill_quiet_hours; "we are a pub" gives type bar. A business name alone, or the kind of business alone, does not answer any other field.
 - When a field is still needed, call ask_owner with that field and one short, friendly question in plain words, in the owner's language and local terms. Ask about one field at a time. Never ask about a field that is already known or that the owner skipped.
 - The four required fields (type, area, goals, currency) come first unless the owner has already given them. Ask an optional field only when the answer would change what Nigiwai shows this business.
 - When you have what you need, call finish. Do not ask for the sake of asking.
@@ -27,9 +28,12 @@ The checklist (required fields first)
 {checklist}"""
 
 FORMATS = {
-    "type": "one of: " + ", ".join(om.TYPE_LABELS),
+    "type": "one of: "
+    + "; ".join(f"{key} ({label})" for key, label in om.TYPE_LABELS.items())
+    + ". Choose the most specific one that fits: a bar inside a hotel is hotel_bar, a place that mainly hosts bands is live_music_venue",
     "area": "text: the street address, or neighbourhood and city, as the owner said it",
-    "goals": "list of one to three of: " + ", ".join(om.GOALS),
+    "goals": "list of one to three of: "
+    + "; ".join(f"{key} ({label})" for key, label in om.GOALS.items()),
     "currency": "a three-letter code such as GBP",
     "hours": 'list of 7 items, Monday first; each null for a closed day or {"open": "HH:MM", "close": "HH:MM"} in 24-hour time (a close earlier than the open means after midnight)',
     "hosts_live_music": "true or false",

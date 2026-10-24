@@ -8,7 +8,7 @@ export type AskItem = {
   name: string;
   type: string;
   reason: string;
-  provenance: "surfaced" | "confirmed";
+  provenance: "surfaced" | "confirmed" | "yours";
   label: LabelKind;
   call: string;
   detail: string | null;
@@ -65,6 +65,7 @@ export const SUGGESTIONS: Record<Mode, string[]> = {
 
 /** The label a provenance gets in plain words. */
 export function provenanceText(p: AskItem["provenance"]): string {
+  if (p === "yours") return "One of your own guests’ favourites, from your survey";
   return p === "surfaced" ? "Surfaced by Qloo" : "Proposed by the assistant, confirmed by Qloo";
 }
 

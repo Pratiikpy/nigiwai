@@ -23,7 +23,7 @@ async function built(page: Page): Promise<Venue[]> {
 
 const tolerated = /openfreemap|ERR_FAILED|Failed to load resource|webgl|GPU/i; // map tiles come from a third party
 // The browser cancels the link prefetches still in flight when a click navigates away; that is not a failed request.
-const prefetch = /requestfailed: GET \S+\?_rsc=\S+ net::ERR_ABORTED/;
+const prefetch = /requestfailed: GET \S+[?&]_rsc=\S+ net::ERR_ABORTED/;
 
 test("landing: the front door says what it is, lists the real venues and needs no account", async ({ page }, info) => {
   const problems = watch(page);
@@ -212,4 +212,50 @@ test("a demo venue: an unknown name, a malformed name and an unready venue each 
   }
   // the failing API responses are the point of this test; nothing else may be reported
   expect(problems.filter((p) => !/404|422|503|Failed to load resource/.test(p) && !prefetch.test(p))).toEqual([]);
+});
+
+test("a demo venue: the Sound plan and Grow open for a visitor from stored results, and an act in them leads to the venue's own Soundcheck", async ({ page }, info) => {
+  test.setTimeout(120_000);
+  const problems = watch(page);
+  const [venue] = await built(page);
+  if (!venue) throw new Error("unreachable");
+  const business = (await sql<{ business_id: string }>("SELECT business_id FROM demo_venue WHERE slug = $1", [venue.slug])).rows[0]?.business_id;
+  if (!business) throw new Error("no business for the demo venue");
+  // the build (or the next sweep) stores a Grow run for every demo venue; without one, run `just demo`
+  const has = (await sql<{ n: number }>("SELECT count(*)::int AS n FROM grow_run WHERE business_id = $1 AND status = 'ready'", [business])).rows[0]?.n ?? 0;
+  expect(has, "the demo venue has no finished Grow run: run `just demo`").toBeGreaterThan(0);
+  await page.goto(`/try/${venue.slug}`);
+  await expect(page.getByRole("tab")).toHaveCount(5);
+
+  await page.getByRole("tab", { name: "Sound plan" }).click();
+  await expect(page).toHaveURL(/tab=sound/);
+  await expect(page.getByRole("heading", { name: "Sound plan", level: 1 })).toBeVisible();
+  await expect(page.getByTestId("not-ready")).toHaveCount(0);
+  const acts = page.getByTestId("act");
+  expect(await acts.count()).toBeGreaterThan(0);
+  await expect(page.getByRole("button", { name: /Score the acts again|Build the acts/ })).toHaveCount(0); // a visitor cannot start anything
+  await shot(page, info, "demo-sound");
+  await a11y(page, "demo sound");
+
+  await page.getByRole("tab", { name: "Grow" }).click();
+  await expect(page).toHaveURL(/tab=grow/);
+  await expect(page.getByRole("heading", { name: "Grow", level: 1 })).toBeVisible();
+  await expect(page.getByTestId("ghosts")).toBeVisible();
+  await expect(page.getByTestId("ask")).toHaveCount(0);
+  await expect(page.getByTestId("notes")).toContainText("Nothing on this page is a count of customers");
+  await shot(page, info, "demo-grow");
+  await a11y(page, "demo grow");
+  await setTheme(page, "dark");
+  await shot(page, info, "demo-grow", "dark");
+  await a11y(page, "demo grow dark");
+  await setTheme(page, "light");
+
+  // an act listed in Grow opens that venue's Soundcheck with the name typed in, not the owner's page
+  const link = page.getByTestId("ghost-act").first().getByRole("link");
+  if (await link.count()) {
+    await link.click();
+    await expect(page).toHaveURL(new RegExp(`/try/${venue.slug}\\?q=`));
+    await expect(page.getByRole("tab", { name: "Soundcheck" })).toHaveAttribute("aria-selected", "true");
+  }
+  expect(problems.filter((p) => !tolerated.test(p) && !prefetch.test(p))).toEqual([]);
 });

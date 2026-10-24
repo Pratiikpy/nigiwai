@@ -24,7 +24,12 @@ export function DemoVenues() {
   }, []);
 
   if (failed) return <Notice tone="error">The demo venues could not be loaded. Please reload the page in a moment.</Notice>;
-  if (!venues) return <Loading label="Loading the demo venues…" />;
+  if (!venues)
+    return (
+      <div className="venues-loading">
+        <Loading label="Loading the demo venues…" />
+      </div>
+    );
   if (venues.length === 0) {
     return <Notice tone="warn">The demo venues are being prepared. Please check back shortly.</Notice>;
   }

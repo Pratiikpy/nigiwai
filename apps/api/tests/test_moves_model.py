@@ -152,3 +152,22 @@ def test_the_ledger_counts_every_answer_including_the_unsure_ones() -> None:
         {"kind": "act", "moves": 3, "more": 1, "fewer": 0, "inconclusive": 1, "waiting": 1},
         {"kind": "menu", "moves": 2, "more": 0, "fewer": 1, "inconclusive": 0, "waiting": 1},
     ]
+
+
+def test_counts_given_per_hour_equal_the_same_scans_listed_one_by_one() -> None:
+    one_by_one = [
+        *weekly(START - timedelta(weeks=4), 4, 5),
+        *weekly(START, 4, 9),
+        *weekly(START, 4, 3, hour=12),
+    ]
+    grouped = [
+        *[(START - timedelta(weeks=4) + timedelta(weeks=w), 4, 19, 5) for w in range(4)],
+        *[(START + timedelta(weeks=w), 4, 19, 9) for w in range(4)],
+        *[(START + timedelta(weeks=w), 4, 12, 3) for w in range(4)],
+    ]
+    today = date(2026, 5, 1)
+    assert mm.evaluate(grouped, FRIDAY_EVENING, START, None, today) == mm.evaluate(
+        one_by_one, FRIDAY_EVENING, START, None, today
+    )
+    mixed = [*grouped[:4], *one_by_one[20:]]  # both forms may be mixed in one list
+    assert mm.evaluate(mixed, FRIDAY_EVENING, START, None, today)["before"]["scans"] == 20
