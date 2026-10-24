@@ -31,6 +31,7 @@ from .models import (
 )
 from .registry import EntityRegistry, MemoryRegistry, RegistryEntry
 from .requests import (
+    INSIGHTS_BY_TYPE,
     ArtistInsights,
     BookInsights,
     BrandInsights,
@@ -50,6 +51,7 @@ from .requests import (
 from .trace import CallContext, CallRecord, MemoryRecorder, TraceRecorder
 
 __all__ = [
+    "INSIGHTS_BY_TYPE",
     "PICKER_TYPES",
     "AreaRef",
     "ArtistInsights",

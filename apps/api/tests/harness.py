@@ -40,6 +40,7 @@ def make_settings(**over: Any) -> Settings:
         "secret_key": SECRET,
         "min_completion_seconds": 0.0,
         "public_base_url": "https://nigiwai.test",
+        "embedded_worker": False,  # tests drive the worker themselves
     }
     base.update(over)
     return Settings(**base)

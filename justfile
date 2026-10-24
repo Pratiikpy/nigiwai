@@ -33,7 +33,7 @@ lint:
     pnpm --filter @nigiwai/web lint
 
 typecheck:
-    uv run mypy packages/qloo-guard/src apps/api/src
+    uv run mypy packages/qloo-guard/src packages/tribes/src apps/api/src
     pnpm --filter @nigiwai/web typecheck
 
 # Unit tests only: no Docker, no network, no Qloo calls.

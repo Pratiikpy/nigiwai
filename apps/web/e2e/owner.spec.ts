@@ -6,6 +6,7 @@ test.beforeEach(async () => resetRateLimits());
 
 /** On a phone the navigation lives in a drawer behind the Menu button. */
 async function nav(page: Page, name: string) {
+  await page.locator(".shell__main").waitFor(); // the shell renders once the session has loaded
   const menu = page.getByRole("button", { name: "Menu" });
   if (await menu.isVisible()) await menu.click();
   await page.getByRole("navigation", { name: "Pages" }).getByRole("link", { name }).click();

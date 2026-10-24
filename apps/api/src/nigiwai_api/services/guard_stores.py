@@ -122,7 +122,7 @@ class PgRegistry:
             row = (
                 await conn.execute(
                     text(
-                        "SELECT types, name_nfc, insights_eligible, popularity, props, musicbrainz_id"
+                        "SELECT types, name_nfc, insights_eligible, popularity, props, musicbrainz_id, tags"
                         " FROM qloo_entity WHERE entity_id = :i"
                     ),
                     {"i": entity_id},
@@ -140,6 +140,7 @@ class PgRegistry:
             description=props.get("description"),
             release_year=props.get("release_year"),
             musicbrainz_id=row.musicbrainz_id,
+            tags=tuple((t[0], t[1], t[2]) for t in (row.tags or [])),
         )
 
     async def put(self, entry: RegistryEntry) -> None:
@@ -153,10 +154,10 @@ class PgRegistry:
             await conn.execute(
                 text(
                     "INSERT INTO qloo_entity (entity_id, type, types, name_nfc, insights_eligible, eligibility_checked_at,"
-                    " popularity, props, musicbrainz_id)"
+                    " popularity, props, musicbrainz_id, tags)"
                     " VALUES (:i, :t, :ts, :n, CAST(:el AS boolean),"
                     " CASE WHEN CAST(:el AS boolean) IS NULL THEN NULL ELSE now() END,"
-                    " :pop, CAST(:props AS jsonb), :mb)"
+                    " :pop, CAST(:props AS jsonb), :mb, CAST(:tags AS jsonb))"
                     " ON CONFLICT (entity_id) DO UPDATE SET"
                     "  type = EXCLUDED.type, types = EXCLUDED.types,"
                     "  name_nfc = CASE WHEN EXCLUDED.name_nfc = '' THEN qloo_entity.name_nfc ELSE EXCLUDED.name_nfc END,"
@@ -166,6 +167,7 @@ class PgRegistry:
                     "  popularity = COALESCE(EXCLUDED.popularity, qloo_entity.popularity),"
                     "  props = qloo_entity.props || EXCLUDED.props,"
                     "  musicbrainz_id = COALESCE(EXCLUDED.musicbrainz_id, qloo_entity.musicbrainz_id),"
+                    "  tags = CASE WHEN EXCLUDED.tags = '[]'::jsonb THEN qloo_entity.tags ELSE EXCLUDED.tags END,"
                     "  updated_at = now()"
                 ),
                 {
@@ -177,6 +179,7 @@ class PgRegistry:
                     "pop": entry.popularity,
                     "props": json.dumps(props),
                     "mb": entry.musicbrainz_id,
+                    "tags": json.dumps([list(t) for t in entry.tags]),
                 },
             )
 

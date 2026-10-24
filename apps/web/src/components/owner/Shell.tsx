@@ -13,6 +13,8 @@ const NAV: { href: string; label: string; icon: IconName }[] = [
   { href: "/app", label: "Overview", icon: "layers" },
   { href: "/app/venue", label: "Your venue", icon: "pin" },
   { href: "/app/survey", label: "Survey", icon: "list" },
+  { href: "/app/people", label: "My people", icon: "people" },
+  { href: "/app/proof", label: "Proof", icon: "shield" },
   { href: "/app/posters", label: "QR posters", icon: "qr" },
 ];
 

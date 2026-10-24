@@ -38,9 +38,19 @@ class Settings(BaseSettings):
     qloo_transport: Literal["harness", "rest"] = "harness"
     qloo_mode: Literal["live", "record", "replay"] = "live"
     qloo_harness_home: str | None = None
-    # Purposes sent to REST before the harness (comma separated). Default: the type-ahead picker, because the
+    # Purposes sent to REST before the harness (comma separated). Default: the type-ahead picker and the two batch jobs that make dozens of calls, because the
     # harness adds about 2.4 s of Node start-up per call. Empty means every purpose prefers the harness.
-    qloo_rest_first: str = "picker"
+    qloo_rest_first: str = "picker,lineup,tribes"
+
+    # Run the background worker inside the API process. Fine for one small instance and for development; a production
+    # deployment runs `python -m nigiwai_api.worker` as its own service and turns this off.
+    embedded_worker: bool = True
+
+    # Public lineups (M24): MusicBrainz event data, CC0. The service asks every client to identify itself with a contact.
+    musicbrainz_url: str = "https://musicbrainz.org/ws/2"
+    lineup_contact: str = (
+        "local development; set NIGIWAI_LINEUP_CONTACT to a URL or email before public use"
+    )
 
     # Public survey
     nonce_ttl_seconds: int = 3600

@@ -104,3 +104,19 @@ fieldset.card > legend + * { clear: both; }
 
 /* The browser draws its own clear button in search fields; the design has one of its own. */
 .search input[type="search"]::-webkit-search-cancel-button, .search input[type="search"]::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; }
+
+/* ---------- My people ---------- */
+.tribe-card { display: grid; gap: var(--s-5); }
+.tribe-card .tribe { font-size: var(--t-xl); font-family: var(--font-display); font-weight: var(--display-weight); letter-spacing: var(--display-track); flex-wrap: wrap; }
+.tribe-card .legend-list li { grid-template-columns: 0 1fr auto; }
+.rhythm { width: 100%; border-collapse: separate; border-spacing: 3px; font-size: var(--t-sm); table-layout: fixed; }
+.rhythm th { font-weight: var(--strong-weight); text-align: left; font-size: var(--t-xs); padding: 2px 4px; }
+.rhythm thead th { text-align: center; }
+.rhythm thead .meta { display: block; font-weight: 400; }
+.rhythm td { text-align: center; height: 30px; border-radius: var(--r-xs); font-variant-numeric: tabular-nums; font-size: var(--t-xs);
+  background: color-mix(in srgb, var(--c, var(--ink)) calc(var(--v, 0) * 45%), var(--bg-sunken)); color: var(--ink); }
+.rhythm td[style*="--v: 0"] { color: transparent; }
+.rhythm td.rhythm__corner { background: none; }
+.disc > summary.row { cursor: pointer; list-style: none; min-height: var(--hit); align-items: center; }
+
+.tnear .tile .ic { display: none; }

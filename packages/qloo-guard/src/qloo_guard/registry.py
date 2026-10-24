@@ -24,6 +24,8 @@ class RegistryEntry:
     description: str | None = None
     release_year: int | None = None
     musicbrainz_id: str | None = None
+    # (tag_id, name, tag type) as returned by Qloo; the tribe model reads these. Empty when not known.
+    tags: tuple[tuple[str, str, str], ...] = ()
 
 
 class EntityRegistry(Protocol):
@@ -51,6 +53,7 @@ class MemoryRegistry:
                 entry.release_year if entry.release_year is not None else old.release_year
             )
             entry.musicbrainz_id = entry.musicbrainz_id or old.musicbrainz_id
+            entry.tags = entry.tags or old.tags
         self._items[entry.entity_id] = entry
 
 
@@ -64,6 +67,7 @@ def entry_from_entity(e: Entity, eligible: bool | None = None) -> RegistryEntry:
         description=e.description,
         release_year=e.release_year,
         musicbrainz_id=e.musicbrainz_id,
+        tags=tuple((t.tag_id, t.name, t.type or "") for t in e.tags),
     )
 
 

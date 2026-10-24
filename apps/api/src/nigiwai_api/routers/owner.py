@@ -4,10 +4,12 @@ the caller must be a member of the tenant in the URL, and the database enforces 
 from __future__ import annotations
 
 import json
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, Query, Response
+from nigiwai_tribes import TribesConfig
+from pydantic import StringConstraints
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -18,14 +20,18 @@ from ..schemas import (
     BusinessOut,
     LocationIn,
     LocationOut,
+    Name,
     QrPointIn,
     QrPointOut,
+    Strict,
     SurveyIn,
     SurveyOut,
     SurveyQuestions,
     SurveyReward,
 )
+from ..services import lineup as lineup_service
 from ..services import qr
+from ..services import tribes as tribes_service
 from ..services.poster import render_poster
 
 router = APIRouter(prefix="/v1/tenants/{tenant_id}", tags=["owner"])
@@ -531,4 +537,267 @@ async def business_stats(business_id: UUID, state: State, access: Tenant) -> dic
         "qr_points": [
             {"id": str(p.id), "label": p.label, "responses": p.responses} for p in points
         ],
+    }
+
+
+# ---- tribes (M7) ----------------------------------------------------------------------------------------------
+@router.get("/businesses/{business_id}/tribes")
+async def get_tribes(business_id: UUID, state: State, access: Tenant) -> dict[str, Any]:
+    """The latest groups, how far the crowd is from each unlock, and whether a refit is queued."""
+    async with scope(state, access) as conn:
+        await _require_business(conn, business_id)
+        row = await tribes_service.latest(conn, business_id)
+        clean = (
+            await conn.execute(
+                text(
+                    "SELECT count(*) FROM response r JOIN survey s ON s.id = r.survey_id AND s.version = r.survey_version"
+                    " WHERE s.business_id = :b AND r.quality_flag = 'ok'"
+                ),
+                {"b": business_id},
+            )
+        ).scalar_one()
+        pending = (
+            await conn.execute(
+                text(
+                    "SELECT count(*) FROM job WHERE business_id = :b AND state IN ('pending', 'running')"
+                ),
+                {"b": business_id},
+            )
+        ).scalar_one()
+    cfg = TribesConfig()
+    return {
+        "responses": clean,
+        "unlock": {
+            "provisional": cfg.min_respondents,
+            "named": cfg.named_respondents,
+            "min_group": cfg.min_group,
+        },
+        "refit_queued": pending > 0,
+        "version": row.version if row else None,
+        "computed_at": row.created_at.isoformat() if row else None,
+        "result": tribes_service.public_view(row.result) if row else None,
+    }
+
+
+@router.post("/businesses/{business_id}/tribes/recompute", status_code=202)
+async def recompute_tribes(business_id: UUID, state: State, access: Writer) -> dict[str, bool]:
+    """Ask the worker to refit now instead of waiting for ten new responses or a day."""
+    async with scope(state, access) as conn:
+        await _require_business(conn, business_id)
+        await conn.execute(
+            text(
+                "INSERT INTO job (kind, tenant_id, business_id, payload) VALUES ('recompute_tribes', :t, :b, '{\"force\": true}')"
+                " ON CONFLICT (kind, business_id) WHERE state = 'pending' DO UPDATE SET payload = '{\"force\": true}'"
+            ),
+            {"t": access.tenant_id, "b": business_id},
+        )
+        await audit(conn, access, "tribes.recompute", str(business_id))
+    return {"queued": True}
+
+
+# ---- public lineups (M24) ---------------------------------------------------------------------------------------
+@router.get("/businesses/{business_id}/lineup/search")
+async def lineup_search(
+    business_id: UUID, state: State, access: Tenant, q: str = Query(min_length=2, max_length=100)
+) -> list[dict[str, Any]]:
+    """Venues named like this in MusicBrainz, so the owner can pick the right one."""
+    async with scope(state, access) as conn:
+        await _require_business(conn, business_id)
+    if await state.limiter.check_all([(f"lineup-search:{access.user_id}", 20, 60.0)]):
+        raise HTTPException(status_code=429, detail="Too many searches. Wait a moment.")
+    try:
+        hits = await state.musicbrainz.search_places(q)
+    except lineup_service.LineupError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return [
+        {"mbid": h.mbid, "name": h.name, "area": h.area, "address": h.address, "kind": h.kind}
+        for h in hits
+    ]
+
+
+@router.get("/businesses/{business_id}/lineup")
+async def get_lineup(business_id: UUID, state: State, access: Tenant) -> dict[str, Any] | None:
+    async with scope(state, access) as conn:
+        await _require_business(conn, business_id)
+        row = (
+            await conn.execute(
+                text(
+                    "SELECT place_mbid, place_name, place_area, status, progress, result, error, created_at, finished_at"
+                    " FROM lineup_profile WHERE business_id = :b"
+                ),
+                {"b": business_id},
+            )
+        ).first()
+    if row is None:
+        return None
+    return {
+        "place": {"mbid": row.place_mbid, "name": row.place_name, "area": row.place_area},
+        "status": row.status,
+        "progress": row.progress,
+        "result": row.result,
+        "error": row.error,
+        "requested_at": row.created_at.isoformat(),
+        "finished_at": row.finished_at.isoformat() if row.finished_at else None,
+    }
+
+
+class LineupIn(Strict):
+    mbid: Annotated[
+        str,
+        StringConstraints(
+            pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        ),
+    ]
+    name: Name
+    area: Name | None = None
+
+
+@router.post("/businesses/{business_id}/lineup", status_code=202)
+async def start_lineup(
+    business_id: UUID, body: LineupIn, state: State, access: Writer
+) -> dict[str, bool]:
+    """Build (or rebuild) the public-lineup profile for this venue. The worker does it; poll GET to follow."""
+    async with scope(state, access) as conn:
+        await _require_business(conn, business_id)
+        await conn.execute(
+            text(
+                "INSERT INTO lineup_profile (tenant_id, business_id, place_mbid, place_name, place_area, status)"
+                " VALUES (:t, :b, :m, :n, :a, 'queued')"
+                " ON CONFLICT (business_id) DO UPDATE SET place_mbid = EXCLUDED.place_mbid, place_name = EXCLUDED.place_name,"
+                "  place_area = EXCLUDED.place_area, status = 'queued', progress = '{}'::jsonb, result = NULL, error = NULL,"
+                "  finished_at = NULL, created_at = now()"
+            ),
+            {
+                "t": access.tenant_id,
+                "b": business_id,
+                "m": body.mbid,
+                "n": body.name,
+                "a": body.area,
+            },
+        )
+        await conn.execute(
+            text(
+                "INSERT INTO job (kind, tenant_id, business_id) VALUES ('build_lineup', :t, :b)"
+                " ON CONFLICT (kind, business_id) WHERE state = 'pending' DO NOTHING"
+            ),
+            {"t": access.tenant_id, "b": business_id},
+        )
+        await audit(conn, access, "lineup.start", f"{business_id}:{body.mbid}")
+    return {"queued": True}
+
+
+@router.delete("/businesses/{business_id}/lineup", status_code=204)
+async def remove_lineup(business_id: UUID, state: State, access: Writer) -> Response:
+    async with scope(state, access) as conn:
+        await _require_business(conn, business_id)
+        await conn.execute(
+            text("DELETE FROM lineup_profile WHERE business_id = :b"), {"b": business_id}
+        )
+        await audit(conn, access, "lineup.remove", str(business_id))
+    return Response(status_code=204)
+
+
+# ---- proof (M13) ------------------------------------------------------------------------------------------------
+# Calls made for guests carry what guests typed or picked, so they are summarised, never listed one by one.
+GUEST_PURPOSES = ("picker", "card")
+
+
+@router.get("/proof")
+async def proof(state: State, access: Tenant) -> dict[str, Any]:
+    """What Qloo was asked for this account, how it was answered, and whether anything shown can be traced to it."""
+    async with scope(state, access) as conn:
+        by_purpose = (
+            await conn.execute(
+                text(
+                    "SELECT purpose, count(*) AS calls,"
+                    "       count(*) FILTER (WHERE cache = 'miss') AS live,"
+                    "       count(*) FILTER (WHERE cache IN ('hit', 'stale', 'replay')) AS cached,"
+                    "       count(*) FILTER (WHERE status NOT IN ('ok', 'empty')) AS problems,"
+                    "       round(avg(latency_ms) FILTER (WHERE cache = 'miss'))::int AS avg_live_ms"
+                    " FROM qloo_call WHERE created_at > now() - interval '30 days' GROUP BY purpose ORDER BY purpose"
+                )
+            )
+        ).all()
+        recent = (
+            await conn.execute(
+                text(
+                    "SELECT id::text AS id, created_at, purpose, endpoint, params, status, http_status, transport, cache,"
+                    "       latency_ms, coalesce(array_length(result_entity_ids, 1), 0) AS results, rule_events"
+                    " FROM qloo_call WHERE purpose <> ALL(:guest) ORDER BY created_at DESC LIMIT 40"
+                ),
+                {"guest": list(GUEST_PURPOSES)},
+            )
+        ).all()
+        tribe_doc = (
+            await conn.execute(
+                text("SELECT result FROM tribe_version ORDER BY created_at DESC LIMIT 1")
+            )
+        ).scalar_one_or_none()
+        lineup_doc = (
+            await conn.execute(
+                text("SELECT result FROM lineup_profile WHERE status = 'ready' LIMIT 1")
+            )
+        ).scalar_one_or_none()
+        shown: list[str] = []
+        for tribe in (tribe_doc or {}).get("tribes", []):
+            shown += [i["entity_id"] for i in tribe.get("top_items", [])]
+        shown += [
+            a["entity_id"] for a in (lineup_doc or {}).get("top_acts", []) if a.get("entity_id")
+        ]
+        shown = sorted(set(shown))
+        known = 0
+        if shown:
+            known = (
+                await conn.execute(
+                    text("SELECT count(*) FROM qloo_entity WHERE entity_id = ANY(:ids)"),
+                    {"ids": shown},
+                )
+            ).scalar_one()
+    total_calls = sum(r.calls for r in by_purpose)
+    total_cached = sum(r.cached for r in by_purpose)
+    return {
+        "integrity": {
+            "items_shown": len(shown),
+            "items_traced": known,
+            "invented": len(shown) - known,
+            "rule": "Every item shown must be an entity Qloo returned and the product stored. Anything else counts as invented.",
+        },
+        "usage_30_days": {
+            "calls": total_calls,
+            "cached": total_cached,
+            "cache_share": round(total_cached / total_calls, 3) if total_calls else None,
+            "by_purpose": [
+                {
+                    "purpose": r.purpose,
+                    "calls": r.calls,
+                    "live": r.live,
+                    "cached": r.cached,
+                    "problems": r.problems,
+                    "avg_live_ms": r.avg_live_ms,
+                }
+                for r in by_purpose
+            ],
+        },
+        "recent_calls": [
+            {
+                "id": r.id,
+                "at": r.created_at.isoformat(),
+                "purpose": r.purpose,
+                "endpoint": r.endpoint,
+                "params": r.params,
+                "status": r.status,
+                "http_status": r.http_status,
+                "transport": r.transport,
+                "cache": r.cache,
+                "latency_ms": r.latency_ms,
+                "results": r.results,
+                "rules": [
+                    {"rule": e.get("rule"), "effect": e.get("effect"), "detail": e.get("detail")}
+                    for e in (r.rule_events or [])
+                    if e.get("effect") != "info"
+                ],
+            }
+            for r in recent
+        ],
+        "hidden": "Calls made while guests type or look at their card are counted above but not listed, because they hold what guests searched for.",
     }

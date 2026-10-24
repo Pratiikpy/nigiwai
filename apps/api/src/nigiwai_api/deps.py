@@ -29,6 +29,9 @@ class AppState:
     guard: QlooGuard | None
     ledger: PgBackedLedger | None
     picker: Any  # PickerService; typed loosely to avoid an import cycle
+    musicbrainz: Any = (
+        None  # MusicBrainz client (services.lineup); typed loosely for the same reason
+    )
 
 
 def state_of(request: Request) -> AppState:

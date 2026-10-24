@@ -27,6 +27,7 @@ import {
   pickProgress,
   saveDraft,
 } from "@/lib/survey";
+import { ShareSheet, TasteCard } from "./TasteCard";
 import { Tile } from "./Tile";
 
 type Load =
@@ -138,7 +139,7 @@ function Flow({
   const [budget, setBudget] = useState<number | null>(saved?.budget ?? null);
   const [popId, setPopId] = useState<string | null>(null);
   const [liveMsg, setLiveMsg] = useState("");
-  const [sheet, setSheet] = useState<"notice" | "remove" | null>(null);
+  const [sheet, setSheet] = useState<"notice" | "remove" | "share" | null>(null);
   const [honeypot, setHoneypot] = useState("");
   const [result, setResult] = useState<ResponseResult | null>(null);
   const mainRef = useRef<HTMLElement>(null);
@@ -194,7 +195,7 @@ function Flow({
       ? "Step 1 of 3 · Your picks"
       : step === 2
         ? "Step 2 of 3 · Review and send"
-        : "Step 3 of 3 · Done";
+        : "Step 3 of 3 · Your card";
 
   const removePick = (id: string) => {
     setPicks((p) => p.filter((x) => x.entity_id !== id));
@@ -271,8 +272,14 @@ function Flow({
               setHoneypot={setHoneypot}
             />
           ) : null}
-          {screen === "done" ? (
-            <DoneScreen survey={survey} result={result} onRemove={() => setSheet("remove")} />
+          {screen === "done" && result ? (
+            <TasteCard
+              receipt={result.receipt}
+              reward={result.reward}
+              businessName={survey.business_name}
+              onRemove={() => setSheet("remove")}
+              onShare={() => setSheet("share")}
+            />
           ) : null}
         </main>
 
@@ -318,6 +325,10 @@ function Flow({
           </div>
         </Sheet>
 
+        {result ? (
+          <ShareSheet open={sheet === "share"} onClose={() => setSheet(null)} receipt={result.receipt} />
+        ) : null}
+
         <RemoveSheet
           open={sheet === "remove"}
           initialCode={screen === "done" ? (result?.receipt ?? "") : ""}
@@ -355,7 +366,7 @@ function ConsentScreen({
         </h1>
         <p className="hero__lead">
           Pick {q.min_picks === q.max_picks ? q.max_picks : `${q.min_picks} to ${q.max_picks}`} favourites: music,
-          shows, films, books and more. {survey.business_name} uses what its guests love to decide what to put on.
+          shows, films, books and more. You get a Taste Card back, and {survey.business_name} learns what its guests love.
         </p>
       </div>
 
@@ -1060,76 +1071,7 @@ function Footer({
   );
 }
 
-// ---- done and removal -------------------------------------------------------------------------------------------
-function DoneScreen({
-  survey,
-  result,
-  onRemove,
-}: {
-  survey: PublicSurvey;
-  result: ResponseResult | null;
-  onRemove: () => void;
-}) {
-  const [copied, setCopied] = useState(false);
-  const code = result?.receipt ?? "";
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* the code is selectable text, so a failed copy is not a dead end */
-    }
-  };
-
-  return (
-    <section className="done" aria-labelledby="h-done">
-      <h1 className="display done__h" id="h-done">
-        Thank you. <em style={{ fontStyle: "normal", background: "var(--highlight)", color: "var(--on-highlight)", padding: "0 0.14em" }}>You&rsquo;re in.</em>
-      </h1>
-      <p className="muted">
-        Your picks are with {survey.business_name}, mixed in with everyone else&rsquo;s. They only ever see groups of 10
-        or more.
-      </p>
-
-      {result?.reward ? (
-        <section className="ticket" aria-labelledby="tk-h">
-          <Icon name="gift" size="lg" />
-          <div>
-            <h2 id="tk-h" className="ticket__h">
-              {result.reward.title}
-            </h2>
-            <p className="meta">{result.reward.detail || "Show this screen at the counter."}</p>
-          </div>
-        </section>
-      ) : null}
-
-      <section className="card receipt" aria-labelledby="h-receipt">
-        <h2 className="card__title" id="h-receipt">
-          Your receipt code
-        </h2>
-        <p className="receipt__code" data-testid="receipt">
-          {code}
-        </p>
-        <p className="meta">
-          Keep it if you want to remove your answers later. Nobody can look your answers up by it, and we can&rsquo;t
-          recover it if it&rsquo;s lost.
-        </p>
-        <div className="row row--wrap">
-          <button className="btn btn--sm" type="button" onClick={() => void copy()}>
-            <Icon name={copied ? "check" : "copy"} size="sm" />
-            {copied ? "Copied" : "Copy code"}
-          </button>
-          <button className="btn btn--sm btn--ghost" type="button" onClick={onRemove}>
-            Remove my answers
-          </button>
-        </div>
-      </section>
-    </section>
-  );
-}
-
+// ---- removal ----------------------------------------------------------------------------------------------------
 function RemoveSheet({ open, initialCode, onClose }: { open: boolean; initialCode: string; onClose: () => void }) {
   const [code, setCode] = useState("");
   const [state, setState] = useState<{ s: "idle" | "working" | "done" | "missing" | "error"; text?: string }>({ s: "idle" });

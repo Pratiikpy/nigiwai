@@ -24,6 +24,7 @@ from .deps import AppState
 from .ratelimit import RateLimiter
 from .routers import auth, health, owner, public
 from .services.guard_stores import PgBackedLedger, PgRecorder, PgRegistry, PgResponseStore
+from .services.lineup import MusicBrainz
 from .services.picker import PickerService
 from .settings import Settings, get_settings
 
@@ -137,6 +138,12 @@ async def build_state(
         log.warning(
             "no Qloo key configured: the picker serves saved matches only and nothing calls Qloo"
         )
+    musicbrainz = MusicBrainz(engine, settings.musicbrainz_url, settings.lineup_contact)
+    if settings.embedded_worker:
+        from .worker import run_forever
+
+        stop = asyncio.Event()
+        tasks.append(asyncio.create_task(run_forever(engine, guard, stop, musicbrainz)))
     state = AppState(
         settings=settings,
         engine=engine,
@@ -145,6 +152,7 @@ async def build_state(
         guard=guard,
         ledger=ledger,
         picker=PickerService(engine, guard),
+        musicbrainz=musicbrainz,
     )
     return state, tasks
 
@@ -171,6 +179,7 @@ def create_app(
                     await state.ledger.flush()
             if state.guard is not None:
                 await state.guard.aclose()
+            await state.musicbrainz.aclose()
             await state.redis.aclose()
             await state.engine.dispose()
 

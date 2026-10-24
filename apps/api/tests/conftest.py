@@ -64,7 +64,7 @@ def admin(database: None) -> Iterator[psycopg.Connection[Any]]:
     """A superuser connection to the test database, for seeding and for reading what the app wrote."""
     with admin_connect() as conn:
         conn.execute(
-            "TRUNCATE app_user, tenant, qloo_entity, qloo_response, trace, qloo_call, quota_ledger,"
+            "TRUNCATE app_user, tenant, qloo_entity, qloo_response, trace, qloo_call, quota_ledger, external_cache,"
             " audit_log CASCADE"
         )
         yield conn

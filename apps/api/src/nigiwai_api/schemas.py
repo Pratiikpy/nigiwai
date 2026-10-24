@@ -319,6 +319,10 @@ class ResponseOut(Strict):
     reward: SurveyReward | None = None
 
 
+class CardIn(Strict):
+    receipt: str = Field(min_length=10, max_length=100)
+
+
 class DeleteIn(Strict):
     receipt: str = Field(min_length=10, max_length=100)
 

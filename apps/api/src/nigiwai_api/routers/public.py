@@ -11,12 +11,13 @@ import time
 import unicodedata
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from ..deps import AppState, State, client_ip_hash
 from ..schemas import (
+    CardIn,
     DeleteIn,
     DeleteOut,
     PickerIn,
@@ -30,6 +31,8 @@ from ..schemas import (
     SurveyReward,
 )
 from ..security import make_nonce, new_token, parse_nonce, token_hash
+from ..services import card as card_service
+from ..services import share as share_service
 
 router = APIRouter(prefix="/v1/public", tags=["public"])
 
@@ -291,3 +294,61 @@ async def delete_response(body: DeleteIn, request: Request, state: State) -> Del
             )
         ).scalar_one()
     return DeleteOut(removed=bool(removed))
+
+
+# ---- the Taste Card ---------------------------------------------------------------------------------------------
+@router.post("/card")
+async def taste_card(body: CardIn, request: Request, state: State) -> dict[str, Any]:
+    """The instant card: no Qloo call. Authorised by the guest's receipt alone."""
+    await limit(state, request, [("pub-card", 40, 3600.0)])
+    ctx = await card_service.load_context(state.engine, body.receipt)
+    if ctx is None:
+        raise HTTPException(
+            status_code=404, detail="We can't find a card for that code. It may have been removed."
+        )
+    return await card_service.simple_card(state.engine, ctx)
+
+
+@router.post("/card/extras")
+async def taste_card_extras(body: CardIn, request: Request, state: State) -> dict[str, Any]:
+    """Related tastes and places near the venue: at most three Qloo calls, skipped when Qloo is slow."""
+    await limit(state, request, [("pub-card-extras", 20, 3600.0)])
+    ctx = await card_service.load_context(state.engine, body.receipt)
+    if ctx is None:
+        raise HTTPException(
+            status_code=404, detail="We can't find a card for that code. It may have been removed."
+        )
+    return await card_service.fill_in(state.engine, state.guard, ctx)
+
+
+@router.post("/card/share")
+async def taste_card_share(body: CardIn, request: Request, state: State) -> Response:
+    """The shareable image: the venue, the group label and up to three pick names, nothing about the guest."""
+    await limit(state, request, [("pub-card-share", 20, 3600.0)])
+    ctx = await card_service.load_context(state.engine, body.receipt)
+    if ctx is None:
+        raise HTTPException(
+            status_code=404, detail="We can't find a card for that code. It may have been removed."
+        )
+    simple = await card_service.simple_card(state.engine, ctx)
+    group = simple["group"]
+    png = share_service.render_share_card(
+        venue=ctx.business_name,
+        label=group["label"] if group["status"] == "matched" else None,
+        picks=[p["name"] for p in simple["picks"]],
+        provisional=bool(group["provisional"]),
+    )
+    return Response(
+        content=png,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": 'attachment; filename="nigiwai-taste-card.png"',
+            "X-Alt-Text": share_service.card_alt_text(
+                ctx.business_name,
+                group["label"] if group["status"] == "matched" else None,
+                [p["name"] for p in simple["picks"]],
+            )
+            .encode("ascii", "replace")
+            .decode("ascii"),
+        },
+    )

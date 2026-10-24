@@ -55,10 +55,34 @@ services:
       NIGIWAI_DATABASE_URL: postgresql+asyncpg://nigiwai_app:${NIGIWAI_APP_DB_PASSWORD}@postgres:5432/nigiwai
       NIGIWAI_REDIS_URL: redis://redis:6379/0
       NIGIWAI_SECRET_KEY: ${NIGIWAI_SECRET_KEY:?set NIGIWAI_SECRET_KEY (32+ random characters)}
+      NIGIWAI_EMBEDDED_WORKER: "false"
       NIGIWAI_COOKIE_SECURE: "true"
       NIGIWAI_TRUST_PROXY: "true"
       NIGIWAI_PUBLIC_BASE_URL: ${NIGIWAI_PUBLIC_BASE_URL:?set NIGIWAI_PUBLIC_BASE_URL (https://your-domain)}
       NIGIWAI_CORS_ORIGINS: '["${NIGIWAI_PUBLIC_BASE_URL}"]'
+      QLOO_API_KEY: ${QLOO_API_KEY:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    command: ["python", "-m", "nigiwai_api.worker"]
+    healthcheck:
+      disable: true
+    environment:
+      NIGIWAI_ENV: production
+      NIGIWAI_DATABASE_URL: postgresql+asyncpg://nigiwai_app:${NIGIWAI_APP_DB_PASSWORD}@postgres:5432/nigiwai
+      NIGIWAI_REDIS_URL: redis://redis:6379/0
+      NIGIWAI_SECRET_KEY: ${NIGIWAI_SECRET_KEY:?set NIGIWAI_SECRET_KEY (32+ random characters)}
+      NIGIWAI_COOKIE_SECURE: "true"
+      NIGIWAI_EMBEDDED_WORKER: "false"
+      NIGIWAI_PUBLIC_BASE_URL: ${NIGIWAI_PUBLIC_BASE_URL:?set NIGIWAI_PUBLIC_BASE_URL (https://your-domain)}
       QLOO_API_KEY: ${QLOO_API_KEY:-}
     depends_on:
       migrate:

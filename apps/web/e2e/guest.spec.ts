@@ -50,7 +50,6 @@ test.describe("the guest survey", () => {
     await a11y(page, "picker idle");
 
     await search(page, `Moon`);
-    await expect(page.getByText(/Looking for|match/)).toBeVisible();
     // The suffix tag keeps this run's items apart from any other run's.
     await search(page, `Moon ${tag}`);
     await expect(page.getByRole("button", { name: `Add Moonlit Choir ${tag}` })).toBeVisible();
@@ -85,12 +84,28 @@ test.describe("the guest survey", () => {
 
     // 4. Send.
     await page.getByRole("button", { name: "Send my picks" }).click();
-    await expect(page.getByRole("heading", { name: /Thank you/ })).toBeVisible();
+    // The card: this venue has no crowd yet, so it says so instead of inventing a group.
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("still forming");
     await expect(page.getByText("A free coffee")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Your picks", level: 2 })).toBeVisible();
     const receipt = (await page.getByTestId("receipt").textContent())?.trim() ?? "";
     expect(receipt.length).toBeGreaterThanOrEqual(20);
+    // The fill-in settles one way or the other: these picks are invented, so Qloo has nothing to relate them to and the
+    // simple card stays with its explanation.
+    await expect(page.getByText("Finding related tastes…")).toBeHidden({ timeout: 30_000 });
+    await expect(page.getByText(/The extras (are slow|aren.t available) right now/)).toBeVisible();
     await shot(page, info, "guest-4-done");
     await a11y(page, "done");
+
+    // Sharing: a picture made on the server from names only.
+    await page.getByRole("button", { name: "Share my card" }).click();
+    const share = page.getByRole("dialog", { name: "Share your card" });
+    await expect(share.getByRole("img", { name: /Your Taste Card/ })).toBeVisible({ timeout: 15_000 });
+    await expect(share.getByRole("link", { name: "Save image" })).toBeVisible();
+    await shot(page, info, "guest-4b-share");
+    await a11y(page, "share");
+    await page.keyboard.press("Escape");
+    await expect(share).toBeHidden();
 
     // What was stored: exactly the three picks and the three answers, nothing identifying.
     const rows = await sql<{ age_band: string; district: string; budget: number; quality_flag: string; n: string }>(

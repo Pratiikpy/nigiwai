@@ -141,7 +141,13 @@ async def test_nonce_ids_are_single_use_under_concurrency(redis_clean: aioredis.
 async def test_guard_writes_traces_calls_registry_and_ledger_to_postgres(
     world: Any, admin: psycopg.Connection[Any]
 ) -> None:
-    world.qloo.catalogue = [artist("Ledger Band", year=2010)]
+    world.qloo.catalogue = [
+        artist(
+            "Ledger Band",
+            year=2010,
+            tags=[("urn:tag:genre:qloo:folk", "Folk"), ("urn:tag:genre:qloo:indie", "Indie")],
+        )
+    ]
     owner = await sign_up(world)
     venue = await make_venue(owner)
     guest = world.client()
@@ -155,6 +161,11 @@ async def test_guard_writes_traces_calls_registry_and_ledger_to_postgres(
         "Ledger Band",
         {"description": "Ledger Band, an invented act.", "release_year": 2010},
     )
+    (tags,) = admin.execute("SELECT tags FROM qloo_entity").fetchone()  # type: ignore[misc]
+    assert tags == [
+        ["urn:tag:genre:qloo:folk", "Folk", "urn:tag:genre:qloo"],
+        ["urn:tag:genre:qloo:indie", "Indie", "urn:tag:genre:qloo"],
+    ]
     assert admin.execute("SELECT count(*) FROM qloo_call WHERE purpose = 'picker'").fetchone() == (
         1,
     )

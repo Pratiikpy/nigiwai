@@ -57,6 +57,31 @@ export async function api<T>(path: string, { method = "GET", body, signal }: Opt
   return payload as T;
 }
 
+/** POST that answers with a file (the share image). Same origin, same error handling. */
+export async function apiBlob(path: string, body: unknown): Promise<Blob> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/v1${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      credentials: "same-origin",
+    });
+  } catch {
+    throw new ApiError(0, "We couldn't reach the server. Check your connection and try again.");
+  }
+  if (!response.ok) {
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      /* not JSON */
+    }
+    throw describe(response.status, payload);
+  }
+  return response.blob();
+}
+
 // ---- shapes (mirrors apps/api/src/nigiwai_api/schemas.py) -----------------------------------------------------
 export type PickerType = "artist" | "movie" | "tv_show" | "book" | "brand" | "podcast" | "videogame";
 
@@ -135,4 +160,37 @@ export type Stats = {
   responses: number;
   held_for_review: number;
   qr_points: { id: string; label: string; responses: number }[];
+};
+
+export type CardGroup = {
+  status: "matched" | "forming";
+  label: string | null;
+  provisional: boolean;
+  line: string;
+  share_text: string;
+  share: number | null;
+  n: number;
+  needed?: number;
+};
+export type TasteCardData = {
+  venue: string;
+  group: CardGroup;
+  picks: { entity_id: string; name: string; type: string }[];
+  reward: Reward | null;
+  can_fill_in: boolean;
+};
+export type CardEntity = {
+  entity_id: string;
+  name: string;
+  type: string;
+  year: number | null;
+  description: string | null;
+  distance_m?: number | null;
+  address?: string | null;
+};
+export type CardExtras = {
+  status: "ok" | "slow" | "unavailable";
+  related: { because: string; items: CardEntity[] }[];
+  near: CardEntity[];
+  calls?: number | null;
 };

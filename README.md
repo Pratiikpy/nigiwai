@@ -8,6 +8,10 @@ Status: work in progress. [docs/BUILD_STATE.md](docs/BUILD_STATE.md) says exactl
 
 - **Guest survey** (`/s/<token>`): consent notice, a type-ahead picker backed by a local index and live Qloo search, optional age band, area and budget, a receipt code, and removal of your own answers.
 - **Owner app** (`/app`): sign up, describe the venue, configure and publish a survey, create QR codes, download an A4 poster or A6 table card.
+- **Taste Card**: after sending, a guest gets a card from their own picks at once, and a few related tastes and places near the venue a moment later (at most three Qloo calls). Shareable as an image.
+- **My people** (`/app/people`): once 60 guests have answered, soft groups ("tribes") with their tags, most-picked items, weekday and hour rhythm, unusual pairings and a coarse age and gender lean from Qloo's audience data. Names unlock at 200 guests. A group is shown only if the crowd is more stable than two shuffled versions of itself; every figure carries a measured, observed or modelled label, and "How this was computed" is on the page.
+- **Public-lineup start**: a venue with no guests yet can pick itself in MusicBrainz (public domain) and see who has played there, matched to Qloo by exact id or name.
+- **Proof** (`/app/proof`): every Qloo call made for the owner, what was sent and what came back, usage by purpose, and a check that nothing shown is missing from what Qloo returned.
 - **Qloo Guard** (`packages/qloo-guard`): every Qloo call goes through typed requests, rule checks, a private cache, a rate limiter, a monthly budget and a trace.
 - **Privacy by construction**: no IP address, user agent or exact time is stored with an answer; every tenant table is protected by row-level security that the application role cannot bypass.
 
@@ -19,7 +23,7 @@ You need Docker, [uv](https://docs.astral.sh/uv/), Node 22.19 or newer with pnpm
 just setup          # Python and web dependencies
 just up             # Postgres (PostGIS) and Redis in Docker
 just migrate        # create the schema
-just dev-api        # API on http://127.0.0.1:8000
+just dev-api        # API on http://127.0.0.1:8000 (the background worker runs inside it)
 just dev-web        # web app on http://localhost:3000   (second terminal)
 ```
 
@@ -46,7 +50,8 @@ just check              # lint, types, unit and integration tests
 | Path | What |
 |---|---|
 | `packages/qloo-guard` | The only code that talks to Qloo |
-| `apps/api` | FastAPI service: accounts, tenancy, picker, survey, posters |
+| `packages/tribes` | The group model: tags, soft factors, stability tests, naming, rhythm |
+| `apps/api` | FastAPI service: accounts, tenancy, picker, survey, posters, groups, card, lineups, background jobs |
 | `apps/web` | Next.js app: guest survey and owner screens |
 | `db` | Alembic migrations (plain SQL) |
 | `docs` | Decisions, build state, open questions |
