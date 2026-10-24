@@ -55,6 +55,10 @@ export default function BusinessPage() {
               "A map of their crowd and its groups.",
               "A Soundcheck for any act, with the working shown.",
               "A one-page Booking Brief to forward to a booker.",
+              "A Today board: their quietest hours, from their own scans, and what to try about them.",
+              "A Sound plan: which acts to play at which time of the week.",
+              "Moves: log a change and see whether scans in that slot moved, with the doubt shown.",
+              "Drafts for an enquiry, an event page, a post or an ad angle, filled from their own records and never sent for them.",
             ].map((t) => (
               <li key={t}>
                 <Icon name="check" />
