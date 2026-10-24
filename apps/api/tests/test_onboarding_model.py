@@ -211,6 +211,8 @@ def test_follow_ups_depend_on_the_answers_before_them() -> None:
         ("currency", "US"),
         ("currency", "dollars"),
         ("currency", "12$"),
+        ("currency", "XYZ"),
+        ("currency", ""),
         ("area", "x"),
         ("area", "a" * 301),
         ("area", "line\x00break"),
@@ -331,3 +333,95 @@ def test_the_owners_own_switches_win_except_on_a_core_module_or_one_that_is_not_
     assert plan["grow"].on is False  # not built: cannot be switched on
     same = {e.id: e for e in om.plan_for(profile, {"map": True}).entries}
     assert not same["map"].changed  # asking for what the planner chose changes nothing
+
+
+def test_a_picked_place_becomes_a_position_and_a_bad_one_is_refused() -> None:
+    place = om.normalise(
+        "place", {"lat": 53.48, "lon": -2.24, "label": "  Quill Street,\n Manchester "}
+    )
+    assert place == {"lat": 53.48, "lon": -2.24, "label": "Quill Street, Manchester"}
+    for bad in (
+        None,
+        "Manchester",
+        {"lat": 53.48, "lon": -2.24},
+        {"lat": 95, "lon": 0, "label": "x"},
+        {"lat": 0, "lon": 181, "label": "x"},
+        {"lat": True, "lon": 0, "label": "x"},
+        {"lat": "53", "lon": 0, "label": "x"},
+        {"lat": 1, "lon": 1, "label": "   "},
+    ):
+        with pytest.raises(om.AnswerError):
+            om.normalise("place", bad)
+    known = {"type": "cafe", "area": "Quill Street", "goals": ["grow"], "place": place}
+    profile = om.build_profile("Quill", known)
+    assert (profile.lat, profile.lon, profile.place_label) == (
+        53.48,
+        -2.24,
+        "Quill Street, Manchester",
+    )
+    assert "place" not in om.FORM_ORDER  # recorded with the address, never asked on its own
+    with pytest.raises(ValidationError):
+        om.Profile.model_validate({**profile.model_dump(), "lon": None})
+
+
+def test_the_time_zone_must_be_a_real_one() -> None:
+    ok = {"name": "X", "type": "bar", "area": "Leeds", "goals": ["grow"]}
+    assert (
+        om.Profile.model_validate({**ok, "timezone": "Europe/London"}).timezone == "Europe/London"
+    )
+    assert om.Profile.model_validate(ok).timezone is None
+    for bad in ("Mars/Olympus", "", "../etc/passwd", "x" * 65):
+        with pytest.raises(ValidationError):
+            om.Profile.model_validate({**ok, "timezone": bad})
+
+
+def test_hours_are_summarised_in_runs_and_every_answer_can_be_said_back_in_plain_words() -> None:
+    assert om.hours_summary(WEEK) == "Mon-Sat 08:00-17:00, Sun closed"
+    assert om.hours_summary(LATE) == "Mon-Sun 17:00-01:00"
+    mixed: list[dict[str, str] | None] = [
+        None,
+        *[{"open": "12:00", "close": "23:00"}] * 3,
+        None,
+        None,
+        None,
+    ]
+    assert om.hours_summary(mixed) == "Mon closed, Tue-Thu 12:00-23:00, Fri-Sun closed"
+    assert om.hours_summary([]) == "not given"
+    assert om.describe_answer("type", "hotel_bar") == "Hotel bar or lounge"
+    assert (
+        om.describe_answer("goals", ["book_acts", "grow"])
+        == "Book better acts; Reach new kinds of customers"
+    )
+    assert om.describe_answer("show_nights", [4, 5]) == "Friday, Saturday"
+    assert om.describe_answer("show_nights", []) == "No regular nights"
+    assert om.describe_answer("capacity", 1200) == "About 1,200 people"
+    assert om.describe_answer("excluded_genres", []) == "None"
+    assert om.describe_answer("hosts_live_music", False) == "No"
+
+
+def test_what_was_understood_lists_only_what_applies_and_never_fills_a_gap() -> None:
+    cafe = {"type": "cafe", "area": "Quill Street", "goals": ["grow"], "currency": "GBP"}
+    by_field = {line["field"]: line["text"] for line in om.understood(cafe)}
+    assert by_field["hours"] == "Not given"
+    assert by_field["hosts_live_music"] == "Not given"
+    assert by_field["place"] == "Not placed yet"
+    assert "show_nights" not in by_field
+    shop = {**cafe, "type": "shop"}
+    assert "hosts_live_music" not in {line["field"] for line in om.understood(shop)}
+    venue = {**cafe, "type": "live_music_venue", "show_nights": [4]}
+    by_field = {line["field"]: line["text"] for line in om.understood(venue)}
+    assert by_field["hosts_live_music"] == "Yes"
+    assert by_field["show_nights"] == "Friday"
+    assert by_field["excluded_genres"] == "Not given"
+    assert by_field["capacity"] == "Not given"
+
+
+def test_a_question_is_allowed_only_while_the_required_ones_still_fit_in_eight() -> None:
+    assert om.may_ask("type", {}, 0)
+    known = {"type": "bar", "area": "x y", "goals": ["grow"], "currency": "GBP"}
+    assert om.may_ask("hours", known, 4)
+    assert om.may_ask("capacity", known, 7)
+    assert not om.may_ask("capacity", known, 8)
+    assert not om.may_ask("hours", {"type": "bar"}, 5)  # area, goals and currency still need places
+    assert om.may_ask("area", {"type": "bar"}, 5)
+    assert om.missing_required({"type": "bar"}) == ["area", "goals", "currency"]

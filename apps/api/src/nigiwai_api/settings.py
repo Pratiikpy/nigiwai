@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 25.0
     llm_daily_limit: int = 100  # model calls per account per day
     ask_daily_limit: int = 40  # questions put to Ask Nigiwai per account per day
+    onboarding_daily_limit: int = 80  # model steps in the onboarding interview per account per day
 
     # The public demo venues (judge mode) let anyone run new checks, and each one calls Qloo. These cap the whole site per
     # day, on top of a per-network limit, and sit well inside the Guard's monthly share for the fit class (5,000 calls, so

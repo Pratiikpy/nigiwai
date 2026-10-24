@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import AfterValidator, Field, StringConstraints, field_validator, model_validator
 
@@ -40,6 +41,166 @@ TYPE_LABELS: dict[str, str] = {
 ALWAYS_LIVE = ("live_music_venue", "festival", "promoter")  # these book live acts by definition
 NEVER_LIVE = ("shop",)  # a shop is not asked about live music
 CURRENCIES = ("USD", "GBP", "EUR", "CAD", "AUD", "NZD", "JPY", "INR")
+# ISO 4217 currency codes in circulation. A code outside this list is refused, so "XYZ" is not a currency.
+ISO_4217 = frozenset(
+    (
+        "AED",
+        "AFN",
+        "ALL",
+        "AMD",
+        "ANG",
+        "AOA",
+        "ARS",
+        "AUD",
+        "AWG",
+        "AZN",
+        "BAM",
+        "BBD",
+        "BDT",
+        "BGN",
+        "BHD",
+        "BIF",
+        "BMD",
+        "BND",
+        "BOB",
+        "BRL",
+        "BSD",
+        "BTN",
+        "BWP",
+        "BYN",
+        "BZD",
+        "CAD",
+        "CDF",
+        "CHF",
+        "CLP",
+        "CNY",
+        "COP",
+        "CRC",
+        "CUP",
+        "CVE",
+        "CZK",
+        "DJF",
+        "DKK",
+        "DOP",
+        "DZD",
+        "EGP",
+        "ERN",
+        "ETB",
+        "EUR",
+        "FJD",
+        "FKP",
+        "GBP",
+        "GEL",
+        "GHS",
+        "GIP",
+        "GMD",
+        "GNF",
+        "GTQ",
+        "GYD",
+        "HKD",
+        "HNL",
+        "HTG",
+        "HUF",
+        "IDR",
+        "ILS",
+        "INR",
+        "IQD",
+        "IRR",
+        "ISK",
+        "JMD",
+        "JOD",
+        "JPY",
+        "KES",
+        "KGS",
+        "KHR",
+        "KMF",
+        "KPW",
+        "KRW",
+        "KWD",
+        "KYD",
+        "KZT",
+        "LAK",
+        "LBP",
+        "LKR",
+        "LRD",
+        "LSL",
+        "LYD",
+        "MAD",
+        "MDL",
+        "MGA",
+        "MKD",
+        "MMK",
+        "MNT",
+        "MOP",
+        "MRU",
+        "MUR",
+        "MVR",
+        "MWK",
+        "MXN",
+        "MYR",
+        "MZN",
+        "NAD",
+        "NGN",
+        "NIO",
+        "NOK",
+        "NPR",
+        "NZD",
+        "OMR",
+        "PAB",
+        "PEN",
+        "PGK",
+        "PHP",
+        "PKR",
+        "PLN",
+        "PYG",
+        "QAR",
+        "RON",
+        "RSD",
+        "RUB",
+        "RWF",
+        "SAR",
+        "SBD",
+        "SCR",
+        "SDG",
+        "SEK",
+        "SGD",
+        "SHP",
+        "SLE",
+        "SOS",
+        "SRD",
+        "SSP",
+        "STN",
+        "SVC",
+        "SYP",
+        "SZL",
+        "THB",
+        "TJS",
+        "TMT",
+        "TND",
+        "TOP",
+        "TRY",
+        "TTD",
+        "TWD",
+        "TZS",
+        "UAH",
+        "UGX",
+        "USD",
+        "UYU",
+        "UZS",
+        "VES",
+        "VND",
+        "VUV",
+        "WST",
+        "XAF",
+        "XCD",
+        "XOF",
+        "XPF",
+        "YER",
+        "ZAR",
+        "ZMW",
+        "ZWL",
+    )
+)
 DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
 
@@ -77,6 +238,22 @@ class Profile(Strict):
     show_nights: list[int] = Field(default_factory=list, max_length=7)
     excluded_genres: list[Short] = Field(default_factory=list, max_length=20)
     price_level: int | None = Field(default=None, ge=1, le=4)
+    # Where it is on the map, when the owner picked a match for the address. Both or neither.
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lon: float | None = Field(default=None, ge=-180, le=180)
+    place_label: Line | None = None
+    timezone: str | None = Field(default=None, max_length=64)
+
+    @field_validator("timezone")
+    @classmethod
+    def _known_timezone(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        try:
+            ZoneInfo(v)
+        except (ZoneInfoNotFoundError, ValueError, OSError) as exc:
+            raise ValueError("unknown time zone; use a name such as Europe/London") from exc
+        return v
 
     @field_validator("goals")
     @classmethod
@@ -100,9 +277,11 @@ class Profile(Strict):
         return sorted(v)
 
     @model_validator(mode="after")
-    def _music_facts_need_music(self) -> Profile:
+    def _consistent(self) -> Profile:
         if self.type in ALWAYS_LIVE:
             self.hosts_live_music = True
+        if (self.lat is None) != (self.lon is None):
+            raise ValueError("give both latitude and longitude, or neither")
         return self
 
 
@@ -110,7 +289,7 @@ class Profile(Strict):
 @dataclass(frozen=True)
 class Field_:
     id: str
-    kind: Literal["choice", "multi", "text", "hours", "number", "days", "list", "yesno"]
+    kind: Literal["choice", "multi", "text", "hours", "number", "days", "list", "yesno", "place"]
     required: bool
     text: str
     why: str
@@ -181,6 +360,14 @@ CHECKLIST: dict[str, Field_] = {
             False,
             "Roughly how many people does the room hold?",
             "It lets a Soundcheck warn when a big act will not fit.",
+        ),
+        # Never asked on its own: it is recorded when the owner picks a match for the address.
+        Field_(
+            "place",
+            "place",
+            False,
+            "Is this the place?",
+            "It puts you on the map, so places and acts are looked for around you.",
         ),
     )
 }
@@ -286,8 +473,8 @@ def normalise(field_id: str, value: Any) -> Any:
         return list(picked)
     if field_id == "currency":
         code = str(value or "").strip().upper()
-        if not re.fullmatch(r"[A-Z]{3}", code):
-            raise AnswerError("Give a three-letter currency code, such as USD, GBP or EUR.")
+        if code not in ISO_4217:
+            raise AnswerError("Give a currency code such as USD, GBP or EUR.")
         return code
     if field_id == "area":
         text = " ".join(str(value or "").split())
@@ -326,6 +513,23 @@ def normalise(field_id: str, value: Any) -> Any:
         if not any(week):
             raise AnswerError("Give at least one day you are open, or skip this question.")
         return week
+    if field_id == "place":
+        if not isinstance(value, dict) or set(value) != {"lat", "lon", "label"}:
+            raise AnswerError("Pick one of the places found.")
+        lat, lon = value["lat"], value["lon"]
+        if (
+            isinstance(lat, bool)
+            or isinstance(lon, bool)
+            or not isinstance(lat, int | float)
+            or not isinstance(lon, int | float)
+            or not -90 <= lat <= 90
+            or not -180 <= lon <= 180
+        ):
+            raise AnswerError("That position is not on Earth.")
+        label = " ".join(str(value["label"]).split())[:300]
+        if not label:
+            raise AnswerError("Pick one of the places found.")
+        return {"lat": float(lat), "lon": float(lon), "label": label}
     if field_id == "capacity":
         try:
             n = int(value)
@@ -351,12 +555,17 @@ def normalise(field_id: str, value: Any) -> Any:
     raise AnswerError("That is not something I asked about.")
 
 
-def build_profile(name: str, known: dict[str, Any]) -> Profile:
+def build_profile(name: str, known: dict[str, Any], *, timezone: str | None = None) -> Profile:
     """The confirmed facts as a typed profile. Raises if a required field is missing or any value is invalid."""
     data = dict(known)
     data["name"] = name
+    if timezone is not None:
+        data["timezone"] = timezone
     data.setdefault("currency", "USD")
     data["hosts_live_music"] = bool(hosts_music(known))
+    place = data.pop("place", None)
+    if place:
+        data["lat"], data["lon"], data["place_label"] = place["lat"], place["lon"], place["label"]
     for optional in ("hours", "show_nights", "excluded_genres"):
         data.setdefault(optional, [])
     return Profile.model_validate({k: v for k, v in data.items() if k in Profile.model_fields})
@@ -465,3 +674,98 @@ def plan_for(profile: Profile, overrides: dict[str, bool] | None = None) -> Plan
             entry.reason = f"Switched {'on' if entry.on else 'off'} by you. {what}"
         entries.append(entry)
     return Plan(entries)
+
+
+# ---------------------------------------------------------------------------------------------------- in plain words
+SHORT_DAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+
+
+def hours_summary(week: list[Any]) -> str:
+    """A week of opening hours as one line, with runs of days that share hours joined: Mon-Sat 08:00-17:00, Sun closed."""
+    if not week:
+        return "not given"
+    runs: list[tuple[int, int, str]] = []
+    for i, day in enumerate(week):
+        text = "closed" if not day else f"{day['open']}-{day['close']}"
+        if runs and runs[-1][2] == text and runs[-1][1] == i - 1:
+            runs[-1] = (runs[-1][0], i, text)
+        else:
+            runs.append((i, i, text))
+    parts = []
+    for first, last, text in runs:
+        days = SHORT_DAYS[first] if first == last else f"{SHORT_DAYS[first]}-{SHORT_DAYS[last]}"
+        parts.append(f"{days} {text}")
+    return ", ".join(parts)
+
+
+def describe_answer(field_id: str, value: Any) -> str:
+    """What an accepted answer says, in the owner's terms: shown back to them and kept in the conversation."""
+    if field_id == "type":
+        return TYPE_LABELS.get(str(value), str(value))
+    if field_id == "goals":
+        return "; ".join(GOALS.get(g, g) for g in value)
+    if field_id == "hours":
+        return hours_summary(value)
+    if field_id == "hosts_live_music":
+        return "Yes" if value else "No"
+    if field_id == "show_nights":
+        return ", ".join(DAYS[d] for d in value) if value else "No regular nights"
+    if field_id == "excluded_genres":
+        return ", ".join(value) if value else "None"
+    if field_id == "capacity":
+        return f"About {value:,} people"
+    if field_id == "place":
+        return str(value["label"])
+    return str(value)
+
+
+FIELD_LABELS = {
+    "type": "Kind of business",
+    "area": "Where",
+    "goals": "What you want help with",
+    "currency": "Currency",
+    "hours": "Opening hours",
+    "hosts_live_music": "Live music",
+    "show_nights": "Show nights",
+    "excluded_genres": "Genres you will not book",
+    "capacity": "Room size",
+    "place": "On the map",
+}
+
+
+def understood(known: dict[str, Any]) -> list[dict[str, str]]:
+    """ "Here is what I understood", one line per field, in the order a person would read it. A field that matters for
+    this business and was not given is listed as not given, never filled in; one that does not apply is left out."""
+    lines: list[dict[str, str]] = []
+    for fid in ("type", "area", "place", "goals", "currency", "hours"):
+        if fid == "place" and fid not in known:
+            text = "Not placed yet"
+        else:
+            text = describe_answer(fid, known[fid]) if fid in known else "Not given"
+        lines.append({"field": fid, "label": FIELD_LABELS[fid], "text": text})
+    music = hosts_music(known)
+    if known.get("type") not in NEVER_LIVE:
+        lines.append(
+            {
+                "field": "hosts_live_music",
+                "label": FIELD_LABELS["hosts_live_music"],
+                "text": "Not given"
+                if music is None
+                else describe_answer("hosts_live_music", music),
+            }
+        )
+    for fid in ("show_nights", "excluded_genres", "capacity"):
+        if applicable(fid, known) or fid in known:
+            text = describe_answer(fid, known[fid]) if fid in known else "Not given"
+            lines.append({"field": fid, "label": FIELD_LABELS[fid], "text": text})
+    return lines
+
+
+def missing_required(known: dict[str, Any]) -> list[str]:
+    return [f for f in REQUIRED if f not in known]
+
+
+def may_ask(field_id: str, known: dict[str, Any], asked: int) -> bool:
+    """Whether one more question is allowed: the cap is eight, and the required questions are never crowded out."""
+    others = [f for f in missing_required(known) if f != field_id]
+    return asked + 1 + len(others) <= MAX_QUESTIONS

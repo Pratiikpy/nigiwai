@@ -70,6 +70,61 @@ class Geocoder:
             return None
         return dict(row.body)
 
+    async def _get(self, params: dict[str, str]) -> Any:
+        """One search request, one at a time and no faster than the policy allows. Raises httpx.HTTPError."""
+        async with self._lock:
+            wait = self.INTERVAL - (time.monotonic() - Geocoder._last)
+            if wait > 0:
+                await asyncio.sleep(wait)
+            try:
+                response = await self._client.get(
+                    f"{self._base}/search", params=params, headers=self._headers
+                )
+            finally:
+                Geocoder._last = time.monotonic()
+        response.raise_for_status()
+        return response.json()
+
+    async def search(self, query: str, *, limit: int = 5) -> list[dict[str, Any]]:
+        """Places matching an address an owner typed: [{label, lat, lon}], best first. Asked only when the owner presses
+        the button (never as they type), and every answer is cached. Raises httpx.HTTPError when it could not be asked."""
+        q = " ".join(query.split())[:200]
+        key = hashlib.sha256(f"geo-search|{limit}|{normalise_district(q)}".encode()).hexdigest()
+        async with self._engine.connect() as conn:
+            row = (
+                await conn.execute(
+                    text(
+                        "SELECT body, fetched_at FROM external_cache WHERE key = :k AND source = 'nominatim'"
+                    ),
+                    {"k": key},
+                )
+            ).first()
+        if row is not None and datetime.now(UTC) - row.fetched_at <= CACHE_TTL:
+            return list(row.body.get("places", []))
+        hits = await self._get(
+            {"q": q, "format": "jsonv2", "limit": str(limit), "addressdetails": "0"}
+        )
+        places: list[dict[str, Any]] = []
+        for hit in hits if isinstance(hits, list) else []:
+            try:
+                lat, lon = float(hit["lat"]), float(hit["lon"])
+                label = " ".join(str(hit.get("display_name") or hit.get("name") or "").split())[
+                    :200
+                ]
+            except (KeyError, TypeError, ValueError):
+                continue
+            if label and -90 <= lat <= 90 and -180 <= lon <= 180:
+                places.append({"label": label, "lat": lat, "lon": lon})
+        async with self._engine.begin() as conn:
+            await conn.execute(
+                text(
+                    "INSERT INTO external_cache (key, source, status, body) VALUES (:k, 'nominatim', 200, CAST(:b AS jsonb))"
+                    " ON CONFLICT (key) DO UPDATE SET body = EXCLUDED.body, fetched_at = now()"
+                ),
+                {"k": key, "b": json.dumps({"places": places})},
+            )
+        return places
+
     async def locate(self, district: str, near: tuple[float, float]) -> dict[str, Any] | None:
         """Ask Nominatim. Returns {lat, lon, label} or None when it knows no such place near the venue. Raises
         httpx.HTTPError when it could not be asked (nothing is cached then, so the next request tries again)."""
@@ -82,18 +137,7 @@ class Geocoder:
             "viewbox": f"{lon - BOX_DEGREES},{lat + BOX_DEGREES},{lon + BOX_DEGREES},{lat - BOX_DEGREES}",
             "bounded": "1",
         }
-        async with self._lock:
-            wait = self.INTERVAL - (time.monotonic() - Geocoder._last)
-            if wait > 0:
-                await asyncio.sleep(wait)
-            try:
-                response = await self._client.get(
-                    f"{self._base}/search", params=params, headers=self._headers
-                )
-            finally:
-                Geocoder._last = time.monotonic()
-        response.raise_for_status()
-        hits = response.json()
+        hits = await self._get(params)
         found: dict[str, Any] = {"found": False}
         if isinstance(hits, list) and hits:
             hit = hits[0]
