@@ -201,6 +201,16 @@ function ActionCard({
               <button className={`btn btn--sm${action.logged ? "" : " btn--primary"}`} type="button" disabled={busy || action.logged} onClick={() => onLog(action.key)}>
                 {action.logged ? "Logged as a move" : "Log this move"}
               </button>
+              {action.logged ? (
+                <Link className="btn btn--sm" href="/app/moves">
+                  See it on Moves
+                </Link>
+              ) : null}
+              {action.act ? (
+                <Link className="btn btn--sm" href={`/app/drafts?action=${encodeURIComponent(action.key)}`}>
+                  Prepare drafts
+                </Link>
+              ) : null}
               <button className="btn btn--sm btn--ghost" type="button" disabled={busy} onClick={() => onDecide(action.key, null)}>
                 Undo
               </button>

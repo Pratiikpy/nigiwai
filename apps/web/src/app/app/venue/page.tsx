@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { Icon } from "@/components/Icon";
+import { HoursEditor } from "@/components/owner/HoursEditor";
 import { Loading, Notice, PageHead } from "@/components/owner/ui";
 import { ApiError, api, type Business, type Location } from "@/lib/api";
+import type { Hours } from "@/lib/onboarding";
 import { useSession } from "@/lib/session";
 import { useVenue } from "@/lib/venue";
 
@@ -20,8 +22,6 @@ const TYPES: [string, string][] = [
   ["other", "Other"],
 ];
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-type Hours = { open: string; close: string };
 
 export default function VenuePage() {
   const { venue, error } = useVenue();
@@ -253,54 +253,7 @@ function VenueForm({ business, location }: { business: Business | null; location
               ))}
             </div>
           </fieldset>
-          <fieldset className="qset" data-testid="hours">
-            <legend>Opening hours</legend>
-            <p className="field__hint">
-              Used to find your quietest hours. Leave every day closed if you would rather not say. A closing time earlier than the opening time means after midnight.
-            </p>
-            <div className="hours-edit">
-              {DAY_NAMES.map((day, i) => {
-                const h = hours[i] ?? null;
-                const set = (next: Hours | null) => setHours((all) => all.map((x, j) => (j === i ? next : x)));
-                return (
-                  <div className="hours-edit__row" key={day}>
-                    <label className="check">
-                      <input
-                        type="checkbox"
-                        checked={h !== null}
-                        onChange={(e) => set(e.target.checked ? { open: "12:00", close: "23:00" } : null)}
-                      />
-                      <span>{day}</span>
-                    </label>
-                    {h ? (
-                      <>
-                        <label className="sr-only" htmlFor={`o-${i}`}>
-                          {day} opens
-                        </label>
-                        <input className="input" id={`o-${i}`} type="time" value={h.open} onChange={(e) => set({ ...h, open: e.target.value })} required />
-                        <span aria-hidden="true">to</span>
-                        <label className="sr-only" htmlFor={`c-${i}`}>
-                          {day} closes
-                        </label>
-                        <input className="input" id={`c-${i}`} type="time" value={h.close} onChange={(e) => set({ ...h, close: e.target.value })} required />
-                      </>
-                    ) : (
-                      <span className="meta">Closed</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            <div className="row row--wrap">
-              <button
-                className="btn btn--sm"
-                type="button"
-                onClick={() => setHours((all) => all.map(() => (hours.find(Boolean) ?? { open: "12:00", close: "23:00" })))}
-              >
-                Copy the first open day to every day
-              </button>
-            </div>
-          </fieldset>
+          <HoursEditor hours={hours} onChange={setHours} />
         </fieldset>
 
         {problem ? <Notice tone="error">{problem}</Notice> : null}

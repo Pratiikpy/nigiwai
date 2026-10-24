@@ -48,3 +48,6 @@ Thumbs.db
 tmp/
 .tmp/
 evals/out/
+
+# crash dumps from the shell
+*.stackdump

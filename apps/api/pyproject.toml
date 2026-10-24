@@ -29,6 +29,8 @@ dependencies = [
   "tzdata>=2024.2",
   "anthropic>=0.75",
   "h3>=4.1",
+  "numpy>=2.0",
+  "scipy>=1.14",
 ]
 
 [build-system]

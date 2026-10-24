@@ -1,0 +1,144 @@
+"""The Sound plan's rules with no database: how a stretch of the week gets its crowd, which acts rank for it, when it says
+nothing instead of guessing. Every name is invented."""
+
+from __future__ import annotations
+
+from nigiwai_api.services import hours as hrs
+from nigiwai_api.services import sound_model as sm
+
+OPEN_ALL = [{"open": "07:00", "close": "02:00"}] * 7
+
+
+def rhythm(*cells: tuple[int, int, float]) -> tuple[tuple[float, ...], ...]:
+    grid = [[0.0] * 24 for _ in range(7)]
+    for day, hour, n in cells:
+        grid[day][hour] += n
+    return tuple(tuple(row) for row in grid)
+
+
+def spread(
+    days: tuple[int, ...], hours: tuple[int, ...], each: float
+) -> tuple[tuple[float, ...], ...]:
+    return rhythm(*[(d, h, each) for d in days for h in hours])
+
+
+def act(name: str, **fits: float) -> sm.SoundAct:
+    return sm.SoundAct(
+        name.lower().replace(" ", "-"),
+        name,
+        ("indie",),
+        0.4,
+        {int(k[1:]): v for k, v in fits.items()},
+    )
+
+
+MORNING_FOLK = sm.SoundGroup(0, "Morning folk", spread((0, 1, 2, 3), (8, 9, 10), 4.0))  # 48 scans
+LATE_DANCE = sm.SoundGroup(
+    1, "Weekend dancers", spread((4, 5, 6), (21, 22, 23), 5.0)
+)  # 45 scans: 15 in the evening, 30 after 22:00
+MASK = hrs.open_mask(OPEN_ALL)
+ACTS = [
+    act("Quiet Fields", g0=0.95, g1=0.1),
+    act("Neon Feast", g0=0.1, g1=0.9),
+    act("Middle Road", g0=0.6, g1=0.6),
+]
+
+
+def cell(plan: dict, key: str) -> dict:
+    return next(c for c in plan["cells"] if c["key"] == key)
+
+
+def test_each_stretch_is_ranked_by_the_groups_who_actually_come_then() -> None:
+    plan = sm.build_plan([MORNING_FOLK, LATE_DANCE], ACTS, MASK)
+    morning = cell(plan, "weekdays-morning")
+    assert morning["status"] == "ok"
+    assert [a["name"] for a in morning["acts"]] == ["Quiet Fields", "Middle Road", "Neon Feast"]
+    assert morning["mix"] == [{"index": 0, "label": "Morning folk", "share": 1.0}]
+    assert morning["acts"][0]["best_for"] == "Morning folk"
+    # the stretch is wholly one group, so the score is the Fit formula with that group's rank: 100 x 0.95, no risk
+    assert morning["acts"][0]["score"] == 95
+    assert cell(plan, "weekend-evening")["status"] == "thin"  # 15 scans: under the bar of 20
+    weekend_late = cell(plan, "weekend-late")
+    assert weekend_late["acts"][0]["name"] == "Neon Feast"
+    assert weekend_late["acts"][0]["score"] == 90
+    # Neon Feast ranks the morning folk at 0.1, below the 0.5 floor: the score takes the risk off
+    assert morning["acts"][-1]["name"] == "Neon Feast"
+    assert morning["acts"][-1]["score"] == round(100 * 0.1 * (1 - 0.5 * ((0.5 - 0.1) / 0.5)))
+
+
+def test_a_stretch_with_too_few_scans_says_so_and_names_no_act() -> None:
+    few = sm.SoundGroup(0, "Few", spread((0,), (9,), 4.0))  # 4 scans
+    plan = sm.build_plan([few], ACTS, MASK)
+    thin = cell(plan, "weekdays-morning")
+    assert thin["status"] == "thin"
+    assert thin["acts"] == []
+    assert "starts from 20" in thin["reason"]
+    assert cell(plan, "weekend-evening")["status"] == "thin"
+    assert all(c["acts"] == [] for c in plan["cells"])
+
+
+def test_a_stretch_when_the_room_is_closed_is_left_out_not_guessed() -> None:
+    weekday_only = [{"open": "08:00", "close": "17:00"}] * 4 + [None, None, None]
+    plan = sm.build_plan([MORNING_FOLK], ACTS, hrs.open_mask(weekday_only))
+    assert cell(plan, "weekend-morning")["status"] == "closed"
+    assert cell(plan, "weekdays-late")["status"] == "closed"
+    assert cell(plan, "weekdays-morning")["status"] == "ok"
+    assert cell(plan, "weekdays-afternoon")["status"] in ("thin", "ok")
+    assert cell(plan, "weekend-morning")["acts"] == []
+
+
+def test_with_no_opening_hours_every_stretch_is_considered_and_the_scans_decide() -> None:
+    plan = sm.build_plan([MORNING_FOLK], ACTS, None)
+    assert cell(plan, "weekdays-morning")["status"] == "ok"
+    assert cell(plan, "weekend-late")["status"] == "thin"
+    assert not any(c["status"] == "closed" for c in plan["cells"])
+
+
+def test_an_act_scored_for_too_little_of_a_stretch_is_not_ranked_there() -> None:
+    both = sm.SoundGroup(1, "Also mornings", spread((0, 1, 2, 3), (8, 9, 10), 4.0))
+    plan = sm.build_plan(
+        [MORNING_FOLK, both], [act("Half Known", g0=0.9), act("Fully Known", g0=0.7, g1=0.7)], MASK
+    )
+    names = [a["name"] for a in cell(plan, "weekdays-morning")["acts"]]
+    assert names == [
+        "Fully Known"
+    ]  # the first was scored for only half of the stretch, under the 60% bar
+
+
+def test_busyness_is_scans_per_open_hour_against_the_busiest_stretch() -> None:
+    busy = sm.SoundGroup(0, "Busy", spread((4, 5, 6), (19, 20, 21), 10.0))  # evenings, heavy
+    quiet = sm.SoundGroup(1, "Quiet", spread((0, 1, 2, 3), (13, 14), 2.5))  # afternoons, light
+    plan = sm.build_plan([busy, quiet], ACTS, MASK, min_scans=5)
+    assert cell(plan, "weekend-evening")["busy"] == 1.0
+    assert cell(plan, "weekend-evening")["busy_label"] == "busy"
+    assert cell(plan, "weekdays-afternoon")["busy_label"] == "quiet"
+    assert 0 < cell(plan, "weekdays-afternoon")["busy"] < sm.QUIET_BELOW
+
+
+def test_ties_are_broken_by_name_and_the_list_is_capped() -> None:
+    many = [act(f"Act {c}", g0=0.8) for c in "DBACEFGH"]
+    plan = sm.build_plan([MORNING_FOLK], many, MASK, top=3)
+    assert [a["name"] for a in cell(plan, "weekdays-morning")["acts"]] == [
+        "Act A",
+        "Act B",
+        "Act C",
+    ]
+
+
+def test_the_plan_states_its_formula_and_how_many_acts_it_weighed() -> None:
+    plan = sm.build_plan([MORNING_FOLK], ACTS, MASK)
+    assert plan["acts_considered"] == 3
+    assert "Score = 100 x group fit" in plan["formula"]
+    assert plan["version"] == "v0"
+
+
+def test_a_room_known_only_from_public_lineups_gets_one_list_and_no_time_of_day() -> None:
+    plan = sm.undated_plan([(0, "Folk scene", 0.7), (1, "Dance scene", 0.3)], ACTS)
+    assert plan["acts"][0]["name"] == "Quiet Fields"
+    assert plan["acts"][0]["best_for"] == "Folk scene"
+    assert "cells" not in plan
+
+
+def test_the_hours_of_a_stretch_read_as_a_span() -> None:
+    assert sm.hours_text((5, 6, 7, 8, 9, 10, 11)) == "05:00 to 12:00"
+    assert sm.hours_text((22, 23, 0, 1, 2, 3, 4)) == "22:00 to 05:00"

@@ -256,6 +256,10 @@ async def test_an_accepted_action_is_logged_as_one_move_and_not_before(
     assert second.json()["new"] is False  # logging twice makes no second move
     row = admin.execute("SELECT kind, title, source, source_key FROM move").fetchall()
     assert row == [("act", fill["title"], "today", fill["key"])]
+    # the move carries the slot the action was about: the quiet Wednesday afternoon
+    assert admin.execute("SELECT weekdays, hour_from, hour_to FROM move").fetchall() == [
+        ([2], 14, 17)
+    ]
     assert (await board(owner, venue))["actions"][0]["logged"] is True
 
 

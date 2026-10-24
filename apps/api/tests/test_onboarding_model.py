@@ -292,7 +292,7 @@ def test_the_plan_gives_a_reason_for_every_module_and_says_what_is_not_built() -
     for core in ("today", "people", "ask", "venue", "survey", "posters", "proof"):
         assert by_id[core]["locked"]
         assert by_id[core]["on"]
-    for unbuilt in ("grow", "sound", "moves"):
+    for unbuilt in ("grow",):
         assert by_id[unbuilt]["on"] is False
         assert by_id[unbuilt]["available"] is False
         assert by_id[unbuilt]["reason"] == "Not built yet."
@@ -425,3 +425,75 @@ def test_a_question_is_allowed_only_while_the_required_ones_still_fit_in_eight()
     assert not om.may_ask("hours", {"type": "bar"}, 5)  # area, goals and currency still need places
     assert om.may_ask("area", {"type": "bar"}, 5)
     assert om.missing_required({"type": "bar"}) == ["area", "goals", "currency"]
+
+
+def test_a_stored_profile_reads_back_as_the_answers_it_came_from() -> None:
+    profile = om.build_profile(
+        "The Lamplighter",
+        {
+            "type": "bar",
+            "area": "Hackney",
+            "goals": ["book_acts"],
+            "currency": "GBP",
+            "hosts_live_music": True,
+            "show_nights": [4],
+            "place": {"lat": 51.5, "lon": -0.05, "label": "Hackney, London"},
+        },
+    )
+    known = om.profile_known(profile.model_dump())
+    assert known["place"] == {"lat": 51.5, "lon": -0.05, "label": "Hackney, London"}
+    assert known["show_nights"] == [4]
+    assert known["hosts_live_music"] is True
+    assert "hours" not in known
+    assert "excluded_genres" not in known  # empty is "not given", as in the interview
+    assert "capacity" not in known
+
+
+def test_the_sound_plan_is_on_for_a_room_that_plays_music_and_off_for_a_promoter_or_a_festival() -> (
+    None
+):
+    def sound(kind: str) -> om.PlanEntry:
+        profile = om.build_profile(
+            "X", {"type": kind, "area": "Leeds", "goals": ["grow"], "hosts_live_music": False}
+        )
+        return next(e for e in om.plan_for(profile).entries if e.id == "sound")
+
+    for kind in (
+        "cafe",
+        "bar",
+        "restaurant",
+        "shop",
+        "hotel_bar",
+        "brewery",
+        "live_music_venue",
+        "other",
+    ):
+        assert sound(kind).on, kind
+        assert sound(kind).reason.startswith("On because any room that plays music can use it.")
+    for kind in ("promoter", "festival"):
+        assert not sound(kind).on
+        assert sound(kind).reason.startswith(
+            "Off because you are not a room that plays music through the day."
+        )
+    assert sound("cafe").available
+
+
+def test_drafts_are_on_for_every_kind_of_business() -> None:
+    for kind in om.TYPE_LABELS:
+        profile = om.build_profile(
+            "X", {"type": kind, "area": "Leeds", "goals": ["grow"], "hosts_live_music": False}
+        )
+        drafts = next(e for e in om.plan_for(profile).entries if e.id == "drafts")
+        assert drafts.on, kind
+        assert "sends nothing" in drafts.reason
+
+
+def test_moves_are_on_for_every_kind_of_business() -> None:
+    for kind in om.TYPE_LABELS:
+        profile = om.build_profile(
+            "X", {"type": kind, "area": "Leeds", "goals": ["grow"], "hosts_live_music": False}
+        )
+        moves = next(e for e in om.plan_for(profile).entries if e.id == "moves")
+        assert moves.on, kind
+        assert moves.available
+        assert moves.reason.startswith("On because every business changes things.")

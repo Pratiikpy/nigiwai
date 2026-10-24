@@ -108,6 +108,17 @@ test("today: a real week of scans shows the quietest stretch, two actions with l
   await fill.getByRole("button", { name: "Log this move" }).click();
   await expect(fill.getByRole("button", { name: "Logged as a move" })).toBeDisabled();
   expect((await sql("SELECT count(*)::int AS n FROM move WHERE business_id = $1", [venue.businessId])).rows[0]?.n).toBe(1);
+  // the move is on the Moves page with the slot the action was about, and says it is too early to judge
+  await fill.getByRole("link", { name: "See it on Moves" }).click();
+  await expect(page.getByRole("heading", { name: "Moves", level: 1 })).toBeVisible();
+  const logged = page.getByTestId("move");
+  await expect(logged).toHaveCount(1);
+  await expect(logged).toContainText("Try Velvet Harbour on Wednesday 14:00 to 17:00");
+  await expect(logged).toContainText("Wednesday 14:00 to 17:00");
+  await expect(logged).toContainText("logged from Today");
+  await expect(logged.getByTestId("verdict")).toHaveText("Too early to say");
+  await page.goBack();
+  await expect(page.getByTestId("action").first()).toBeVisible();
   // dismiss the other, then undo, then dismiss again
   await book.getByRole("button", { name: "Not now" }).click();
   await expect(actions.nth(1)).toHaveAttribute("data-state", "dismissed");

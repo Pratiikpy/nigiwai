@@ -772,6 +772,23 @@ def summary(doc: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def pool_entry(doc: dict[str, Any]) -> dict[str, Any]:
+    """Everything the Sound plan needs from one scored act, and nothing from Qloo's answer itself: the act, our score and the
+    rank it earned for each group (only groups it was scored for)."""
+    return {
+        "entity_id": doc["candidate"]["entity_id"],
+        "name": doc["candidate"]["name"],
+        "genres": doc["candidate"]["genres"],
+        "popularity": doc["candidate"]["popularity"],
+        "score": doc["score"],
+        "fits": {
+            str(g["index"]): g["fit"]
+            for g in doc["groups"]
+            if g["status"] == "scored" and g["fit"] is not None
+        },
+    }
+
+
 def pick_wildcard(results: list[dict[str, Any]], taken: set[str]) -> dict[str, Any] | None:
     """A small act just outside the obvious: below the median popularity of what was considered, and ranked well
     (0.6 or more) for each of the crowd's two biggest scored groups. The highest score among those wins."""
@@ -864,6 +881,7 @@ async def suggest(
         "scored": len(ok),
         "top": [summary(stored[d["candidate"]["entity_id"]]) for d in top_docs],
         "wildcard": summary(stored[wild["candidate"]["entity_id"]]) if wild else None,
+        "pool": [pool_entry(d) for d in ok],
         "generated_at": datetime.now(UTC).isoformat(),
     }
 
@@ -883,11 +901,43 @@ async def suggestions(
         ).first()
     if row is None:
         return None
+    # the wider pool of scored acts is for the Sound plan; the suggestion list shown to people does not carry it
+    shown = (
+        {k: v for k, v in row.result.items() if k != "pool"}
+        if isinstance(row.result, dict)
+        else row.result
+    )
     return {
         "status": row.status,
         "basis": {"kind": row.basis_kind, "ref": row.basis_ref},
-        "result": row.result,
+        "result": shown,
         "error": row.error,
+        "updated_at": row.updated_at.isoformat(),
+    }
+
+
+async def suggestion_pool(
+    engine: AsyncEngine, tenant_id: UUID, business_id: UUID
+) -> dict[str, Any] | None:
+    """The scored acts behind the last suggestion run, with what they were scored against, or None if there is none (or it
+    was made before the pool was kept)."""
+    async with transaction(engine, tenant_id=tenant_id) as conn:
+        row = (
+            await conn.execute(
+                text(
+                    "SELECT status, basis_kind, basis_ref, result, updated_at FROM act_suggestion WHERE business_id = :b"
+                ),
+                {"b": business_id},
+            )
+        ).first()
+    if row is None or row.status != "ready" or not isinstance(row.result, dict):
+        return None
+    pool = row.result.get("pool")
+    if not isinstance(pool, list):
+        return None
+    return {
+        "basis": {"kind": row.basis_kind, "ref": row.basis_ref},
+        "pool": pool,
         "updated_at": row.updated_at.isoformat(),
     }
 

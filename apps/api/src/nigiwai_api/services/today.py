@@ -152,6 +152,7 @@ def _fill_action(
             "entity_id": act["entity_id"],
             "soundcheck_id": act.get("soundcheck_id"),
         },
+        "slot": {"weekdays": [window.weekday], "from": window.start, "to": window.end},
     }
 
 
@@ -167,6 +168,7 @@ def _book_slot(
             "key": f"{w.weekday}:{w.start}",
             "reason": "is where your scans cluster",
             "measured": f"{w.scans} of {in_hours} scans came on {hrs.describe(w)}, your busiest stretch.",
+            "window": {"weekdays": [w.weekday], "from": w.start, "to": w.end},
         }
     if nights:
         return {
@@ -174,6 +176,7 @@ def _book_slot(
             "key": f"{nights[0]}",
             "reason": "is one of the nights you hold shows",
             "measured": None,
+            "window": {"weekdays": [nights[0]], "from": 17, "to": 22},
         }
     if lineup_weekday and len(lineup_weekday) == 7 and max(lineup_weekday) > 0:
         day = max(range(7), key=lambda d: lineup_weekday[d])
@@ -182,6 +185,7 @@ def _book_slot(
             "key": f"{day}",
             "reason": "is the day your past public lineups skew to",
             "measured": None,
+            "window": {"weekdays": [day], "from": 17, "to": 22},
         }
     return None
 
@@ -230,6 +234,7 @@ def _book_action(
             "entity_id": act["entity_id"],
             "soundcheck_id": act.get("soundcheck_id"),
         },
+        "slot": slot["window"],
     }
 
 
@@ -474,12 +479,14 @@ async def log_move(
     if action["decision"] != "accepted":
         raise TodayError("Accept the action first, then log it as a move.", 409)
     started = datetime.fromisoformat(board["generated_at"]).date()
+    slot_window = action.get("slot")
     async with transaction(engine, tenant_id=tenant_id, user_id=user_id) as conn:
         row = (
             await conn.execute(
                 text(
-                    "INSERT INTO move (tenant_id, business_id, kind, title, started_on, source, source_key, created_by)"
-                    " VALUES (:t, :b, 'act', :ti, :d, 'today', :k, :u)"
+                    "INSERT INTO move (tenant_id, business_id, kind, title, started_on, source, source_key, created_by,"
+                    " weekdays, hour_from, hour_to) VALUES (:t, :b, 'act', :ti, :d, 'today', :k, :u,"
+                    " CAST(:w AS smallint[]), :hf, :ht)"
                     " ON CONFLICT (business_id, source, source_key) DO NOTHING RETURNING id"
                 ),
                 {
@@ -489,6 +496,9 @@ async def log_move(
                     "d": started,
                     "k": key,
                     "u": user_id,
+                    "w": list(slot_window.get("weekdays", [])) if slot_window else [],
+                    "hf": slot_window.get("from") if slot_window else None,
+                    "ht": slot_window.get("to") if slot_window else None,
                 },
             )
         ).first()

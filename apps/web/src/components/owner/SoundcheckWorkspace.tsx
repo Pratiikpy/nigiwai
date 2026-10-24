@@ -36,7 +36,8 @@ export function SoundcheckWorkspace({ base, canWrite, demo = false }: { base: st
   const [verdict, setVerdict] = useState<Verdict | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
+  // another page (the Sound plan) can link here with an act to look up already typed
+  const [query, setQuery] = useState(() => (typeof window === "undefined" ? "" : (new URLSearchParams(window.location.search).get("q") ?? "").slice(0, 120)));
   const [hits, setHits] = useState<ActSearch | null>(null);
   const [searching, setSearching] = useState(false);
   const [tick, setTick] = useState(0);

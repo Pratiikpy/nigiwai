@@ -415,6 +415,7 @@ def view(s: Session, *, agent_available: bool) -> dict[str, Any]:
         "known": s.known,
         "understood": om.understood(s.known),
         "ready": ready,
+        "fields": {fid: om.question_for(fid, s.known) for fid in om.CHECKLIST if fid != "place"},
         "business_name": s.context.get("business"),
         "profile": profile,
         "plan": plan,
@@ -668,6 +669,7 @@ async def current_plan(conn: AsyncConnection) -> dict[str, Any] | None:
         "modules": row.plan["modules"],
         "overrides": row.overrides,
         "profile": row.profile,
+        "summary": om.understood(om.profile_known(row.profile)),
     }
 
 

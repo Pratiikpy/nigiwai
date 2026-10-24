@@ -201,9 +201,8 @@ async def test_a_picked_place_is_saved_on_the_map_and_a_new_address_forgets_the_
         assert res.status_code == 200, res.text
         state = res.json()
     assert state["known"]["place"]["lat"] == 53.48
-    assert {line["field"]: line["text"] for line in state["understood"]}["place"].startswith(
-        "12 Quill"
-    )
+    by_field = {line["field"]: line["text"] for line in state["understood"]}
+    assert by_field["place"] == "Found on the map"
     # bad positions are refused
     bad = await reply(
         owner,
@@ -611,6 +610,9 @@ async def test_the_plan_can_be_switched_by_the_owner_and_core_modules_cannot(
     assert plan["version"] == 1
     assert "soundcheck" not in modules_on(plan)
     assert plan["profile"]["type"] == "cafe"
+    summary = {line["field"]: line["text"] for line in plan["summary"]}
+    assert summary["type"] == "Café"
+    assert summary["hours"] == "Mon-Sat 08:00-17:00, Sun closed"
 
     res = await owner.put("/plan", json={"overrides": {"soundcheck": True, "map": False}})
     assert res.status_code == 200, res.text
@@ -711,10 +713,38 @@ async def test_the_interview_state_is_json_the_page_can_rely_on(world: World) ->
     state = await begin(owner, "form")
     assert set(state) == {
         "id", "mode", "status", "agent_available", "messages", "question", "asked", "max_questions",
-        "known", "understood", "ready", "business_name", "profile", "plan", "notice",
+        "known", "understood", "ready", "business_name", "profile", "plan", "notice", "fields",
     }  # fmt: skip
     assert state["max_questions"] == 8
     assert state["business_name"] == "The Lantern"
     assert state["profile"] is None  # not shown until the required answers are in
     assert set(state["question"]) == {"field", "kind", "text", "why", "optional", "choices"}
+    assert set(state["fields"]) == set(om.CHECKLIST) - {
+        "place"
+    }  # what the page needs to let any answer be changed
+    assert state["fields"]["hours"]["days"][0] == "Monday"
     json.dumps(state)
+
+
+async def test_an_answer_that_would_overwrite_a_change_made_elsewhere_is_refused_not_merged(
+    world: World, admin: psycopg.Connection[Any]
+) -> None:
+    owner = await sign_up(world)
+    state = await begin(owner, "form")
+    engine = world.app.state.nigiwai.engine
+    deps = service.Deps(engine, None, world.app.state.nigiwai.limiter, 80)
+
+    def another_window_answers_first(s: service.Session) -> bool:
+        # the owner's other tab saves its own answer between this one reading and writing
+        admin.execute("UPDATE onboarding_session SET updated_at = now() + interval '1 second'")
+        return service.apply_answer(s, "type", "bar")
+
+    with pytest.raises(service.OnboardingError) as exc:
+        await service._step(
+            deps, uuid.UUID(owner.tenant_id), uuid.UUID(state["id"]), another_window_answers_first
+        )
+    assert exc.value.status == 409
+    assert "changed in another window" in str(exc.value)
+    assert rows(admin, "SELECT known FROM onboarding_session") == [
+        ({},)
+    ]  # nothing of the refused answer was kept

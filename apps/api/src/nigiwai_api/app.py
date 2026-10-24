@@ -27,7 +27,9 @@ from .routers import (
     auth,
     brief,
     demo,
+    drafts,
     health,
+    moves,
     onboarding,
     owner,
     public,
@@ -274,6 +276,8 @@ def create_app(
     app.include_router(today.router)
     app.include_router(ask.router)
     app.include_router(onboarding.router)
+    app.include_router(moves.router)
+    app.include_router(drafts.router)
     app.include_router(trust.public)
     app.include_router(trust.owner)
     app.include_router(public.router)

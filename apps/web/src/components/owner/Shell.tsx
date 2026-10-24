@@ -7,21 +7,47 @@ import { Icon, type IconName } from "@/components/Icon";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useSession } from "@/lib/session";
-import { VenueProvider } from "@/lib/venue";
+import { MODULE_OF_PATH } from "@/lib/onboarding";
+import { VenueProvider, useVenue } from "@/lib/venue";
 
 const NAV: { href: string; label: string; icon: IconName }[] = [
   { href: "/app", label: "Overview", icon: "layers" },
+  { href: "/app/onboarding", label: "Your plan", icon: "sliders" },
   { href: "/app/today", label: "Today", icon: "calendar" },
   { href: "/app/venue", label: "Your venue", icon: "pin" },
   { href: "/app/survey", label: "Survey", icon: "list" },
   { href: "/app/map", label: "Crowd map", icon: "map" },
   { href: "/app/people", label: "My people", icon: "people" },
   { href: "/app/soundcheck", label: "Soundcheck", icon: "bolt" },
+  { href: "/app/sound", label: "Sound plan", icon: "music" },
+  { href: "/app/moves", label: "Moves", icon: "flag" },
+  { href: "/app/drafts", label: "Drafts", icon: "send" },
   { href: "/app/ask", label: "Ask Nigiwai", icon: "chat" },
   { href: "/app/brief", label: "Booking Brief", icon: "download" },
   { href: "/app/proof", label: "Proof", icon: "shield" },
   { href: "/app/posters", label: "QR posters", icon: "qr" },
 ];
+
+/** The side menu. Once the owner has a plan, the tools it leaves off are hidden here (their pages still open by address). */
+function Nav({ path, onNavigate }: { path: string; onNavigate: () => void }) {
+  const { venue } = useVenue();
+  const off = new Set((venue?.plan?.modules ?? []).filter((m) => !m.on).map((m) => m.id));
+  return (
+    <nav className="nav" aria-label="Pages">
+      {NAV.filter((item) => !off.has(MODULE_OF_PATH[item.href] ?? "")).map((item) => (
+        <Link
+          key={item.href}
+          href={item.href}
+          aria-current={(path === item.href || (item.href !== "/app" && path.startsWith(`${item.href}/`))) ? "page" : undefined}
+          onClick={onNavigate}
+        >
+          <Icon name={item.icon} />
+          {item.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const { state, signOut } = useSession();
@@ -53,6 +79,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   }
 
   return (
+    <VenueProvider>
     <div className="shell">
       <a className="skip-link" href="#main">
         Skip to the page
@@ -71,19 +98,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <strong>{state.tenant.name}</strong>
           <span className="meta">{state.me.email}</span>
         </div>
-        <nav className="nav" aria-label="Pages">
-          {NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={(item.href === "/app" ? path === "/app" : path.startsWith(item.href)) ? "page" : undefined}
-              onClick={() => setOpen(false)}
-            >
-              <Icon name={item.icon} />
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        <Nav path={path} onNavigate={() => setOpen(false)} />
         <div className="side__foot">
           <ThemeToggle />
           <button className="btn btn--sm btn--ghost" type="button" onClick={() => void signOut()}>
@@ -92,8 +107,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
       <main className="shell__main" id="main" tabIndex={-1}>
-        <VenueProvider>{children}</VenueProvider>
+        {children}
       </main>
     </div>
+    </VenueProvider>
   );
 }

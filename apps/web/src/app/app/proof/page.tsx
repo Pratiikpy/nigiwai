@@ -110,6 +110,7 @@ export default function ProofPage() {
               {Math.round((data.usage_30_days.cache_share ?? 0) * 100)}% of calls were answered from the private cache and
               did not reach Qloo.
             </p>
+            <div className="tablewrap" tabIndex={0} role="region" aria-label="Qloo calls by purpose, scrolls sideways on a narrow screen">
             <table className="rhythm" style={{ tableLayout: "auto" }}>
               <caption className="sr-only">Qloo calls by purpose in the last 30 days</caption>
               <thead>
@@ -135,6 +136,7 @@ export default function ProofPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </>
         )}
         <p className="meta">{data.hidden}</p>

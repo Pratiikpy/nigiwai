@@ -7,7 +7,7 @@ import { useSession } from "@/lib/session";
 import { useVenue } from "@/lib/venue";
 
 export default function Overview() {
-  const { venue, error } = useVenue();
+  const { venue, error, canWrite } = useVenue();
   const { state } = useSession();
   const tenantName = state.status === "ready" ? state.tenant.name : "Welcome";
 
@@ -55,6 +55,20 @@ export default function Overview() {
             : "Three steps and guests can start telling you what they love."
         }
       />
+
+      {!venue.plan && canWrite ? (
+        <section className="card onb-invite" aria-labelledby="h-onb" data-testid="invite">
+          <h2 className="card__title" id="h-onb">
+            Let Nigiwai get to know your business
+          </h2>
+          <p className="muted">
+            Eight questions at most, two minutes. Nigiwai sets up your venue and chooses the tools that fit, and says why.
+          </p>
+          <Link className="btn btn--primary" href="/app/onboarding">
+            Tell Nigiwai about your business
+          </Link>
+        </section>
+      ) : null}
 
       <ol className="steps" aria-label="Set-up steps">
         {steps.map((step, i) => (

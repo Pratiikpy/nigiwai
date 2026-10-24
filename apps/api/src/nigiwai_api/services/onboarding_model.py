@@ -593,8 +593,9 @@ MODULES: tuple[Module, ...] = (
     Module("soundcheck", "Soundcheck", "/app/soundcheck", False),
     Module("brief", "Booking Brief", "/app/brief", False),
     Module("grow", "Grow", "/app/grow", False, built=False),
-    Module("sound", "Sound plan", "/app/sound", False, built=False),
-    Module("moves", "Moves", "/app/moves", False, built=False),
+    Module("sound", "Sound plan", "/app/sound", False),
+    Module("moves", "Moves", "/app/moves", False),
+    Module("drafts", "Drafts", "/app/drafts", False),
 )
 MODULE_IDS = tuple(m.id for m in MODULES)
 CORE_REASONS = {
@@ -659,6 +660,21 @@ def plan_for(profile: Profile, overrides: dict[str, bool] | None = None) -> Plan
         if m.id == "map":
             what = "Where your guests scan and what is around you."
             on, reason = True, what
+        elif m.id == "drafts":
+            what = "Drafts prepares an enquiry, an event page, a post or an ad angle for you to review and approve; it sends nothing."
+            on, reason = True, f"On because every business tells people what it is doing. {what}"
+        elif m.id == "moves":
+            what = "Moves log what you change and show whether scans in the same slot moved."
+            on, reason = True, f"On because every business changes things. {what}"
+        elif m.id == "sound":
+            what = "The Sound plan ranks acts to play by time of the week from who is in the room then."
+            if profile.type in ("promoter", "festival"):
+                on, reason = (
+                    False,
+                    f"Off because you are not a room that plays music through the day. {what}",
+                )
+            else:
+                on, reason = True, f"On because any room that plays music can use it. {what}"
         else:
             what = f"{m.label} checks an act against your crowd."
             if profile.hosts_live_music:
@@ -740,6 +756,8 @@ def understood(known: dict[str, Any]) -> list[dict[str, str]]:
     for fid in ("type", "area", "place", "goals", "currency", "hours"):
         if fid == "place" and fid not in known:
             text = "Not placed yet"
+        elif fid == "place" and known["place"]["label"] == known.get("area"):
+            text = "Found on the map"  # the address is the match the owner picked; saying it twice adds nothing
         else:
             text = describe_answer(fid, known[fid]) if fid in known else "Not given"
         lines.append({"field": fid, "label": FIELD_LABELS[fid], "text": text})
@@ -769,3 +787,21 @@ def may_ask(field_id: str, known: dict[str, Any], asked: int) -> bool:
     """Whether one more question is allowed: the cap is eight, and the required questions are never crowded out."""
     others = [f for f in missing_required(known) if f != field_id]
     return asked + 1 + len(others) <= MAX_QUESTIONS
+
+
+def profile_known(profile: dict[str, Any]) -> dict[str, Any]:
+    """A stored profile as the interview's `known` answers: the facts it holds, with nothing added."""
+    known: dict[str, Any] = {}
+    for fid in ("type", "area", "goals", "currency", "hosts_live_music", "capacity"):
+        if profile.get(fid) is not None:
+            known[fid] = profile[fid]
+    for fid in ("hours", "show_nights", "excluded_genres"):
+        if profile.get(fid):
+            known[fid] = profile[fid]
+    if profile.get("lat") is not None and profile.get("lon") is not None:
+        known["place"] = {
+            "lat": profile["lat"],
+            "lon": profile["lon"],
+            "label": profile.get("place_label") or profile.get("area") or "Saved position",
+        }
+    return known

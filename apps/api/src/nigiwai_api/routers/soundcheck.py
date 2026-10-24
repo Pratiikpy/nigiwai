@@ -14,6 +14,7 @@ from ..db import transaction
 from ..deps import State, Tenant
 from ..schemas import Strict
 from ..services import compare as compare_service
+from ..services import sound as sound_service
 from ..services import soundcheck as service
 
 router = APIRouter(prefix="/v1/tenants/{tenant_id}/businesses/{business_id}", tags=["soundcheck"])
@@ -118,6 +119,15 @@ async def calls(
     if found is None:
         raise HTTPException(status_code=404, detail="not found")
     return found
+
+
+@router.get("/sound")
+async def sound_plan(business_id: UUID, state: State, access: Tenant) -> dict[str, Any]:
+    """The Sound plan (M26): acts to play by time of week, from stored groups and scored acts. No Qloo call."""
+    doc = await sound_service.build(state.engine, access.tenant_id, business_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="not found")
+    return doc
 
 
 @router.get("/suggestions")

@@ -302,6 +302,35 @@ export async function setRhythm(qrId: string): Promise<void> {
   }
 }
 
+/** Give a venue's planted responses, in order, exactly these times: [weekday (Monday 0), hour, how many]. The count must match. */
+export async function plantWeek(qrId: string, cells: [number, number, number][]): Promise<void> {
+  const slots: [number, number][] = cells.flatMap(([day, hour, n]) => Array.from({ length: n }, () => [day, hour] as [number, number]));
+  const ids = (await sql<{ id: string }>("SELECT id FROM response WHERE qr_point_id = $1 ORDER BY id", [qrId])).rows.map((r) => r.id);
+  if (ids.length !== slots.length) throw new Error(`plant ${slots.length} responses, found ${ids.length}`);
+  for (let i = 0; i < ids.length; i++) {
+    await sql("UPDATE response SET local_weekday = $1, local_hour = $2 WHERE id = $3", [slots[i]![0], slots[i]![1], ids[i]]);
+  }
+}
+
+/** The date of the Friday `weeksAgo` weeks before the most recent one (today, if today is a Friday), as YYYY-MM-DD. */
+export function fridayAgo(weeksAgo: number): string {
+  const d = new Date();
+  const back = (d.getDay() - 5 + 7) % 7; // getDay: Sunday 0 ... Friday 5
+  d.setDate(d.getDate() - back - 7 * weeksAgo);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Give a venue's planted responses, in order, these dates and hours: [date, hour, how many]. The count must match. */
+export async function plantDated(qrId: string, plan: [string, number, number][]): Promise<void> {
+  const cells: [string, number][] = plan.flatMap(([date, hour, n]) => Array.from({ length: n }, () => [date, hour] as [string, number]));
+  const ids = (await sql<{ id: string }>("SELECT id FROM response WHERE qr_point_id = $1 ORDER BY id", [qrId])).rows.map((r) => r.id);
+  if (ids.length !== cells.length) throw new Error(`plant ${cells.length} responses, found ${ids.length}`);
+  for (let i = 0; i < ids.length; i++) {
+    const [date, hour] = cells[i]!;
+    await sql("UPDATE response SET local_date = $1::date, local_weekday = EXTRACT(ISODOW FROM $1::date)::int - 1, local_hour = $2 WHERE id = $3", [date, hour, ids[i]]);
+  }
+}
+
 /** Suggested acts and their stored Soundchecks for a venue read from public lineups, as the worker would leave them. */
 export async function plantSuggestions(tenantId: string, businessId: string, acts: { name: string; score: number; best: string }[]): Promise<void> {
   const ref = (
@@ -337,4 +366,32 @@ export async function plantSuggestions(tenantId: string, businessId: string, act
     "INSERT INTO act_suggestion (business_id, tenant_id, status, basis_kind, basis_ref, result) VALUES ($1, $2, 'ready', 'lineup', $3, $4::jsonb) ON CONFLICT (business_id) DO UPDATE SET status = 'ready', basis_kind = 'lineup', basis_ref = EXCLUDED.basis_ref, result = EXCLUDED.result",
     [businessId, tenantId, ref, JSON.stringify(doc)],
   );
+}
+
+/** Scored acts for a venue whose groups are already fitted, as a suggestion run leaves them: every act is ranked for each
+ * of the venue's shown groups, the first act best for the first group, the second for the second, and so on round the
+ * groups. The ranks are planted, so the browser tests never send a request to Qloo for this. */
+export async function plantPool(tenantId: string, businessId: string, names: string[]): Promise<{ groups: number[]; version: number }> {
+  const latest = (
+    await sql<{ version: number; result: { tribes: { index: number; shown?: boolean }[] } }>(
+      "SELECT version, result FROM tribe_version WHERE business_id = $1 ORDER BY version DESC LIMIT 1",
+      [businessId],
+    )
+  ).rows[0];
+  if (!latest) throw new Error("no fitted groups");
+  const groups = latest.result.tribes.filter((t) => t.shown).map((t) => t.index);
+  if (groups.length < 2) throw new Error("fewer than two shown groups");
+  const pool = names.map((name, i) => {
+    const fits: Record<string, number> = {};
+    groups.forEach((g, j) => {
+      fits[String(g)] = j === i % groups.length ? 0.92 - 0.01 * i : 0.35 + 0.02 * ((i + j) % 5);
+    });
+    return { entity_id: randomUUID(), name, genres: ["indie", "folk"], popularity: 0.3, score: 80 - i, fits };
+  });
+  const doc = { basis: { kind: "guests", ref: String(latest.version), label: "your guests" }, considered: pool.length, scored: pool.length, top: [], wildcard: null, pool, generated_at: new Date().toISOString() };
+  await sql(
+    "INSERT INTO act_suggestion (business_id, tenant_id, status, basis_kind, basis_ref, result) VALUES ($1, $2, 'ready', 'guests', $3, $4::jsonb) ON CONFLICT (business_id) DO UPDATE SET status = 'ready', basis_kind = 'guests', basis_ref = EXCLUDED.basis_ref, result = EXCLUDED.result",
+    [businessId, tenantId, String(latest.version), JSON.stringify(doc)],
+  );
+  return { groups, version: latest.version };
 }
