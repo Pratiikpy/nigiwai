@@ -577,3 +577,116 @@ async def test_one_of_two_owners_can_delete_their_login(
         "/v1/account/delete", headers=two.headers, json={"password": PASSWORD}
     )
     assert refused.status_code == 409
+
+
+# ---- starting another venue from a login ---------------------------------------------------------------------------
+async def test_a_login_can_start_another_venue_and_owns_it(
+    world: World, admin: psycopg.Connection[Any]
+) -> None:
+    owner, _ = await code_of(world, "own@example.com")
+    r = await owner.client.post(
+        "/v1/account/accounts", headers=owner.headers, json={"business_name": "  Side Bar  "}
+    )
+    assert r.status_code == 201, r.text
+    made = r.json()
+    assert made["name"] == "Side Bar" and made["role"] == "owner"
+    me = (await owner.client.get("/v1/auth/me")).json()
+    assert [(t["name"], t["role"]) for t in me["tenants"]] == [
+        ("Acc", "owner"),
+        ("Side Bar", "owner"),
+    ]
+    # it is a working account of its own: its owner can use it, and the first account's data is not in it
+    mine = await owner.client.post(
+        f"/v1/tenants/{made['id']}/businesses",
+        headers=owner.headers,
+        json={"name": "Side", "type": "bar", "currency": "GBP"},
+    )
+    assert mine.status_code == 201, mine.text
+    assert [
+        b["name"]
+        for b in (await owner.client.get(f"/v1/tenants/{owner.tenant_id}/businesses")).json()
+    ] == []
+    assert admin.execute(
+        "SELECT action FROM audit_log WHERE tenant_id = %s AND action LIKE 'account.%%'",
+        (made["id"],),
+    ).fetchall() == [("account.create",)]
+
+
+async def test_a_person_whose_account_was_deleted_can_start_a_new_one(world: World) -> None:
+    owner, _ = await code_of(world, "own@example.com")
+    gone = await owner.client.post(
+        f"/v1/tenants/{owner.tenant_id}/delete-account",
+        headers=owner.headers,
+        json={"password": PASSWORD, "confirm_name": "Acc"},
+    )
+    assert gone.status_code == 204
+    assert (await owner.client.get("/v1/auth/me")).json()["tenants"] == []
+    made = await owner.client.post(
+        "/v1/account/accounts", headers=owner.headers, json={"business_name": "Fresh Start"}
+    )
+    assert made.status_code == 201
+    assert [t["name"] for t in (await owner.client.get("/v1/auth/me")).json()["tenants"]] == [
+        "Fresh Start"
+    ]
+
+
+async def test_starting_a_venue_needs_a_session_a_clean_name_and_stops_at_five_accounts(
+    world: World,
+) -> None:
+    owner, _ = await code_of(world, "own@example.com")
+    assert (
+        await world.client().post("/v1/account/accounts", json={"business_name": "X"})
+    ).status_code == 401
+    assert (
+        await owner.client.post("/v1/account/accounts", json={"business_name": "X"})
+    ).status_code == 403  # no CSRF header
+    for body in (
+        {},
+        {"business_name": ""},
+        {"business_name": "   "},
+        {"business_name": "a" * 121},
+        {"business_name": "two\nlines"},
+        {"business_name": "X", "extra": 1},
+        {"business_name": 5},
+    ):
+        r = await owner.client.post("/v1/account/accounts", headers=owner.headers, json=body)
+        assert r.status_code == 422, (body, r.status_code)
+    # the person already owns one; three starts an hour is the limit
+    codes = [
+        (
+            await owner.client.post(
+                "/v1/account/accounts", headers=owner.headers, json={"business_name": f"Venue {i}"}
+            )
+        ).status_code
+        for i in range(3)
+    ]
+    assert codes == [201, 201, 201]
+    limited = await owner.client.post(
+        "/v1/account/accounts", headers=owner.headers, json={"business_name": "One too many"}
+    )
+    assert limited.status_code == 429
+
+
+async def test_the_cap_on_owned_accounts_holds_when_the_hourly_limit_does_not_apply(
+    world: World, admin: psycopg.Connection[Any]
+) -> None:
+    owner, _ = await code_of(world, "own@example.com")
+    for i in range(4):  # made directly, as if over several hours
+        (tenant,) = admin.execute(
+            "INSERT INTO tenant (name) VALUES (%s) RETURNING id", (f"Held {i}",)
+        ).fetchone()  # type: ignore[misc]
+        admin.execute(
+            "INSERT INTO membership (tenant_id, user_id, role) VALUES (%s, %s, 'owner')",
+            (tenant, owner.me["user_id"]),
+        )
+    r = await owner.client.post(
+        "/v1/account/accounts", headers=owner.headers, json={"business_name": "Sixth"}
+    )
+    assert r.status_code == 409 and "already own 5" in r.json()["detail"]
+    # being a viewer or a manager elsewhere does not count against the cap
+    other, _ = await code_of(world, "other@example.com")
+    made = (await other.post("/team/invitations", json={"role": "viewer"})).json()
+    joined = await owner.client.post(
+        "/v1/invitations/accept", headers=owner.headers, json={"token": made["token"]}
+    )
+    assert joined.status_code == 200

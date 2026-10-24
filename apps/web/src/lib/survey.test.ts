@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PickerItem } from "./api";
-import { districtProblem, initials, metaLine, parseConsent, pickProgress } from "./survey";
+import { districtProblem, initials, metaLine, parseAreas, parseConsent, pickProgress } from "./survey";
 
 describe("initials", () => {
   it("takes two letters and drops a leading article", () => {
@@ -64,5 +64,20 @@ describe("districtProblem", () => {
     expect(districtProblem("https://x.test")).not.toBeNull();
     expect(districtProblem("12345")).not.toBeNull();
     expect(districtProblem("x".repeat(61))).not.toBeNull();
+  });
+});
+
+describe("parseAreas", () => {
+  it("reads a comma-separated line into clean, distinct names", () => {
+    expect(parseAreas("")).toEqual({ areas: [], problem: null });
+    expect(parseAreas("Eastside, Old Town ,  Riverside\nHarbour; ")).toEqual({ areas: ["Eastside", "Old Town", "Riverside", "Harbour"], problem: null });
+    expect(parseAreas("Old   Town").areas).toEqual(["Old Town"]);
+  });
+  it("refuses a repeat (by spelling and by accents), contact details, a long name and more than twelve", () => {
+    expect(parseAreas("Eastside, eastside").problem).toContain("twice");
+    expect(parseAreas("Café, Cafe").problem).toContain("twice");
+    expect(parseAreas("Eastside, me@example.com").problem).not.toBeNull();
+    expect(parseAreas("x".repeat(41)).problem).toContain("longer than 40");
+    expect(parseAreas(Array.from({ length: 13 }, (_, i) => `Area ${String.fromCharCode(65 + i)}`).join(",")).problem).toContain("twelve");
   });
 });

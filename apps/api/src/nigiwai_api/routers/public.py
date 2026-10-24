@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import re
 import time
-import unicodedata
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -29,6 +28,8 @@ from ..schemas import (
     SelectOut,
     SurveyQuestions,
     SurveyReward,
+    area_key,
+    area_name,
 )
 from ..security import make_nonce, new_token, parse_nonce, token_hash
 from ..services import card as card_service
@@ -161,29 +162,23 @@ async def select(body: SelectIn, request: Request, state: State) -> SelectOut:
 
 
 # ---- submit ---------------------------------------------------------------------------------------------------
-_DISTRICT_BAD = re.compile(r"[@]|https?:|www\.|\d{5,}|[\x00-\x1f]", re.IGNORECASE)
-
-
-def clean_district(value: str | None) -> str | None:
-    """The district is free text, so it is kept to a short place name: no addresses, emails, links or long numbers."""
+def clean_district(value: str | None, listed: list[str] | None = None) -> str | None:
+    """The area a guest gave. With a list it must be one of the owner's areas (spelt as the owner spelt it); without one it is free
+    text, kept to a short place name."""
     if value is None:
         return None
-    normalised = unicodedata.normalize("NFC", value)
-    # Control and invisible format characters (newlines, zero-width marks, bidi overrides) are never part of a name.
-    if any(unicodedata.category(ch) in ("Cc", "Cf", "Cs", "Co") for ch in normalised):
-        raise HTTPException(
-            status_code=422,
-            detail="Please give just the name of your area, for example 'Eastside'.",
-        )
-    text_value = " ".join(normalised.split())
-    if not text_value:
+    try:
+        name = area_name(value)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if name is None:
         return None
-    if len(text_value) > 60 or _DISTRICT_BAD.search(text_value):
-        raise HTTPException(
-            status_code=422,
-            detail="Please give just the name of your area, for example 'Eastside'.",
-        )
-    return text_value
+    if listed:
+        match = next((a for a in listed if area_key(a) == area_key(name)), None)
+        if match is None:
+            raise HTTPException(status_code=422, detail="Please choose one of the areas listed.")
+        return match
+    return name
 
 
 @router.post("/response", status_code=201)
@@ -225,7 +220,7 @@ async def submit(body: ResponseIn, request: Request, state: State) -> ResponseOu
 
     age_band = body.age_band if q.ask_age_band else None
     budget = body.budget if q.ask_budget else None
-    district = clean_district(body.district) if q.ask_district else None
+    district = clean_district(body.district, q.districts) if q.ask_district else None
 
     # Single use: a nonce submits at most one response.
     if not await state.limiter.consume_nonce(nonce_id, state.settings.nonce_ttl_seconds):

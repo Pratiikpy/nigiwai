@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Loading, Notice, PageHead } from "@/components/owner/ui";
 import { ApiError, api, type PickerType, type Questions, type Survey } from "@/lib/api";
-import { CATEGORIES } from "@/lib/survey";
+import { CATEGORIES, parseAreas } from "@/lib/survey";
 import { useVenue } from "@/lib/venue";
 
 const ALL_TYPES = Object.keys(CATEGORIES) as PickerType[];
@@ -13,6 +13,7 @@ const DEFAULTS: Questions = {
   max_picks: 5,
   ask_age_band: true,
   ask_district: true,
+  districts: [],
   ask_budget: true,
   picker_types: ["artist", "tv_show", "movie", "brand", "podcast", "videogame", "book"],
 };
@@ -42,6 +43,7 @@ function SurveyForm({ businessId, survey }: { businessId: string; survey: Survey
   const [types, setTypes] = useState<PickerType[]>(initial.picker_types);
   const [age, setAge] = useState(initial.ask_age_band);
   const [district, setDistrict] = useState(initial.ask_district);
+  const [areasLine, setAreasLine] = useState((initial.districts ?? []).join(", "));
   const [budget, setBudget] = useState(initial.ask_budget);
   const [rewardTitle, setRewardTitle] = useState(survey?.reward?.title ?? "");
   const [rewardDetail, setRewardDetail] = useState(survey?.reward?.detail ?? "");
@@ -50,7 +52,15 @@ function SurveyForm({ businessId, survey }: { businessId: string; survey: Survey
   const [done, setDone] = useState<string | null>(null);
 
   const firstQr = venue?.qrPoints.find((q) => q.status === "active" && q.url);
-  const invalid = min > max ? "The minimum can't be more than the maximum." : types.length === 0 ? "Choose at least one kind of pick." : null;
+  const areas = parseAreas(areasLine);
+  const invalid =
+    min > max
+      ? "The minimum can't be more than the maximum."
+      : types.length === 0
+        ? "Choose at least one kind of pick."
+        : district && areas.problem
+          ? areas.problem
+          : null;
 
   const submit = async (publish: boolean) => {
     if (invalid || busy) return;
@@ -64,6 +74,7 @@ function SurveyForm({ businessId, survey }: { businessId: string; survey: Survey
           max_picks: max,
           ask_age_band: age,
           ask_district: district,
+          districts: district ? areas.areas : [],
           ask_budget: budget,
           picker_types: types,
         },
@@ -158,6 +169,28 @@ function SurveyForm({ businessId, survey }: { businessId: string; survey: Survey
                 <span className="meta">A district or neighbourhood, never an address.</span>
               </span>
             </label>
+            {district ? (
+              <div className="field" style={{ marginLeft: "calc(24px + var(--s-3))" }}>
+                <label htmlFor="s-areas">Areas guests choose from (optional)</label>
+                <input
+                  className="input"
+                  id="s-areas"
+                  data-testid="areas"
+                  autoComplete="off"
+                  placeholder="Eastside, Old Town, Riverside"
+                  value={areasLine}
+                  onChange={(e) => setAreasLine(e.target.value)}
+                  aria-invalid={areas.problem !== null}
+                  aria-describedby="s-areas-hint"
+                />
+                <p className={areas.problem ? "field__err" : "field__hint"} id="s-areas-hint" role={areas.problem ? "alert" : undefined}>
+                  {areas.problem ??
+                    (areas.areas.length
+                      ? `Guests pick one of ${areas.areas.length}, or skip. Nothing is typed, so no address can be given by mistake.`
+                      : "Separate with commas, up to twelve. Leave it empty and guests type their own neighbourhood.")}
+                </p>
+              </div>
+            ) : null}
             <label className="check">
               <input type="checkbox" checked={budget} onChange={(e) => setBudget(e.target.checked)} />
               <span>

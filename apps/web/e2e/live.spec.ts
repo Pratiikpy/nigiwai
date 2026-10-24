@@ -303,6 +303,7 @@ test("grow reads a real crowd: a button press queues the worker, the page waits 
   expect(problems.filter((p) => !/_rsc=|ERR_ABORTED/.test(p))).toEqual([]);
 });
 
+const MODEL_NOTE = "set NIGIWAI_E2E_LIVE_MODEL=1 with a real model configured on the API (the stand-in model the other specs use would fail these)";
 // ---- the model-led features against a real model. The API must be started with a model configured (see the README, "Browser
 // tests with a real model"); with none, the assistant is not offered and these are skipped.
 async function modelConfigured(request: APIRequestContext): Promise<boolean> {
@@ -314,6 +315,7 @@ async function modelConfigured(request: APIRequestContext): Promise<boolean> {
 }
 
 test("onboarding with a real assistant: an owner writes a paragraph, the check shows what was understood, the rest is asked, and it is saved", async ({ page }, info) => {
+  test.skip(process.env.NIGIWAI_E2E_LIVE_MODEL !== "1", MODEL_NOTE);
   test.setTimeout(300_000);
   await resetRateLimits();
   const problems = watch(page);
@@ -366,6 +368,7 @@ test("onboarding with a real assistant: an owner writes a paragraph, the check s
 });
 
 test("ask with a real model and real Qloo: a culture question is answered with items Qloo returned, and the trace shows the calls", async ({ page, request }, info) => {
+  test.skip(process.env.NIGIWAI_E2E_LIVE_MODEL !== "1", MODEL_NOTE);
   test.setTimeout(300_000);
   await resetRateLimits();
   const problems = watch(page);

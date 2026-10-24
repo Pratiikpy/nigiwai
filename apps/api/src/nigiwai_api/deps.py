@@ -69,25 +69,17 @@ async def load_session(request: Request, state: AppState) -> SessionInfo | None:
     token = request.cookies.get(state.settings.session_cookie)
     if not token:
         return None
+    # Before anyone is known the lookup goes through a definer function (which also notes, at most once a minute, that the session was
+    # used); the login tables themselves are row-level protected from the application role.
     async with state.engine.begin() as conn:
         row = (
             await conn.execute(
-                text(
-                    "SELECT s.id, s.user_id, s.csrf_secret, u.email FROM app_session s JOIN app_user u ON u.id = s.user_id"
-                    " WHERE s.token_hash = :h AND s.expires_at > now() AND u.deleted_at IS NULL"
-                ),
+                text("SELECT id, user_id, csrf_secret, email FROM auth_session(:h)"),
                 {"h": token_hash(token)},
             )
         ).first()
-        if row is None:
-            return None
-        # Touch at most once a minute so reads stay cheap.
-        await conn.execute(
-            text(
-                "UPDATE app_session SET last_seen_at = now() WHERE id = :i AND last_seen_at < now() - interval '1 minute'"
-            ),
-            {"i": row.id},
-        )
+    if row is None:
+        return None
     return SessionInfo(
         session_id=row.id, user_id=row.user_id, email=str(row.email), csrf_secret=row.csrf_secret
     )

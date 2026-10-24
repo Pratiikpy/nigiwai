@@ -168,9 +168,7 @@ async def recover(engine: AsyncEngine, email: str, code: str, new_password: str)
     async with engine.begin() as conn:
         row = (
             await conn.execute(
-                text(
-                    "SELECT id, recovery_hash FROM app_user WHERE email = :e AND deleted_at IS NULL"
-                ),
+                text("SELECT id, recovery_hash FROM auth_user_by_email(:e)"),
                 {"e": email},
             )
         ).first()
@@ -241,6 +239,37 @@ def _holds_up(rows: Sequence[Any]) -> str:
         f"You are the only owner of {names}. Make someone else an owner, or delete "
         f"{'it' if len(rows) == 1 else 'them'}, before deleting your login."
     )
+
+
+MAX_OWNED = 5
+
+
+async def new_account(engine: AsyncEngine, user_id: UUID, name: str) -> dict[str, str]:
+    """Start another venue from a login that already exists: a new account with the person as its owner. A person can own a handful, so
+    the number of accounts cannot be multiplied without a limit."""
+    async with transaction(engine, user_id=user_id) as conn:
+        owned = (
+            await conn.execute(
+                text("SELECT count(*) FROM membership WHERE user_id = :u AND role = 'owner'"),
+                {"u": user_id},
+            )
+        ).scalar_one()
+        if int(owned) >= MAX_OWNED:
+            raise AccountError(
+                f"You already own {MAX_OWNED} accounts. Delete one you no longer use before starting another.",
+                409,
+            )
+        tenant_id = (
+            await conn.execute(text("SELECT create_tenant(:n, :u)"), {"n": name, "u": user_id})
+        ).scalar_one()
+    async with transaction(engine, tenant_id=tenant_id, user_id=user_id) as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO audit_log (tenant_id, actor, action, target) VALUES (:t, :a, 'account.create', :t2)"
+            ),
+            {"t": tenant_id, "a": str(user_id), "t2": str(tenant_id)},
+        )
+    return {"id": str(tenant_id), "name": name, "role": "owner"}
 
 
 async def delete_login(engine: AsyncEngine, user_id: UUID, password: str) -> None:

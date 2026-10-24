@@ -81,12 +81,12 @@ Nigiwai (賑わい): a crowd-reading tool for venues; hero flow Soundcheck. Spec
 - **Places are not pickable** (PRD M3 lists places). Place search needs a location-bounded design and the Guard's place rules; not built.
 - **No Qloo images on the survey** (privacy, D9), although PRD M3 lists them.
 - **Posters:** names or reward text outside Latin script are left off the printed page (the QR and URL still print) because the bundled fonts are Latin only. The survey and picker handle any script.
-- **District is free text** limited to a short place name; a street name without digits would still pass. Replace with an owner-defined list if this proves a problem.
+- **Area (district) is free text unless the owner lists areas** (D32). With a list the guest taps one and nothing is typed; without one the answer is a short place name that the server refuses if it looks like an address, an email or a link, which is a filter, not a guarantee.
 - Minimum three picks and the 2 s quarantine threshold are choices (D9, D11), untested against real guests.
 - Reverse proxy must overwrite `X-Forwarded-For` (README), or rate limits can be dodged.
 - Team invitations are built (D29: links, no email). There is no emailed password reset or email verification (no email service is authorised, HUMAN H2); a recovery code stands in (D30), so someone who loses the password and the code cannot get back in.
-- `app_user` has no row-level security (D30): the privacy of a sign-in address rests on the API's queries. Move login lookup behind definer functions and enable RLS before a public launch.
-- Starting a new venue from an existing login is not built: a second account is made by signing up with another address (or by being invited).
+- The login tables are row-level protected like the tenant tables (D33): the application role sees its own login and sessions, and signs people in through two definer functions that answer one key each.
+- A login can start another venue (up to five owned, three starts an hour) from the Your login page or from the page a person sees when they are in no account.
 - Production Postgres: migrations as the table-owner role, the API as `nigiwai_app`.
 - **NOT VERIFIED: tribe stability on real QR picks.** The thresholds (60 and 200) come from stability on public listening and Qloo-tag data (proofs D and G), not from guests answering a QR survey. Usefulness of the groups to owners is untested.
 - **NOT VERIFIED: the age and gender reading is accurate.** Direction matched common knowledge in the research folder's tests and in the live run above; no survey ground truth exists. It is labelled Modelled, and a group with audience data for fewer than three of its top items gets a plain "not enough" note instead of a reading.

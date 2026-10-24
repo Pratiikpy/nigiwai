@@ -27,7 +27,10 @@ pytestmark = pytest.mark.skipif(
 )
 
 MODEL_SETTINGS: dict[str, Any] = {}
-if os.environ.get("NIGIWAI_LLM_BASE_URL"):
+# An address alone is not a model: the browser tests point this variable at a stand-in that needs no key, and these tests must not run on that.
+if os.environ.get("NIGIWAI_LLM_BASE_URL") and (
+    os.environ.get("NIGIWAI_LLM_API_KEY") or os.environ.get("NIGIWAI_LLM_KEY_FILE")
+):
     MODEL_SETTINGS = {
         "llm_provider": "openai",
         "llm_base_url": os.environ["NIGIWAI_LLM_BASE_URL"],

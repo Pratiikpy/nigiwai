@@ -244,3 +244,98 @@ async def test_the_api_refuses_to_start_as_a_role_that_bypasses_rls(
         await assert_rls_effective(app_engine)  # the real application role passes
     finally:
         await app_engine.dispose()
+
+
+# ---- the login tables are protected the same way ---------------------------------------------------------------
+async def test_the_app_role_sees_only_its_own_login_and_sessions(
+    world: World, app_engine: Any
+) -> None:
+    a = await sign_up(world, "login-a@example.com")
+    b = await sign_up(world, "login-b@example.com")
+    await world.client().post(
+        "/v1/auth/login", json={"email": "login-b@example.com", "password": "a-long-passphrase-9"}
+    )
+    ua, ub = uuid.UUID(a.me["user_id"]), uuid.UUID(b.me["user_id"])
+    async with transaction(app_engine, user_id=ua) as conn:
+        assert (await conn.execute(text("SELECT email::text FROM app_user"))).scalars().all() == [
+            "login-a@example.com"
+        ]
+        assert (
+            await conn.execute(
+                text("SELECT count(*) FROM app_session WHERE user_id = :b"), {"b": ub}
+            )
+        ).scalar_one() == 0
+        assert (await conn.execute(text("SELECT count(*) FROM app_session"))).scalar_one() == 1
+        # another person's login cannot be changed or removed, and cannot be created under a made-up identity
+        for statement in (
+            "UPDATE app_user SET password_hash = 'x' WHERE id = :b",
+            "DELETE FROM app_user WHERE id = :b",
+            "UPDATE app_session SET expires_at = now() WHERE user_id = :b",
+            "DELETE FROM app_session WHERE user_id = :b",
+        ):
+            assert (await conn.execute(text(statement), {"b": ub})).rowcount == 0, statement
+    with pytest.raises((DBAPIError, ProgrammingError)):
+        async with transaction(app_engine, user_id=ua) as conn:
+            await conn.execute(
+                text(
+                    "INSERT INTO app_user (id, email, password_hash) VALUES (gen_random_uuid(), 'made-up@example.com', 'x')"
+                )
+            )
+    # with nobody signed in the tables are empty to the application role
+    async with app_engine.begin() as conn:
+        assert (await conn.execute(text("SELECT count(*) FROM app_user"))).scalar_one() == 0
+        assert (await conn.execute(text("SELECT count(*) FROM app_session"))).scalar_one() == 0
+
+
+async def test_the_lookups_made_before_anyone_is_signed_in_answer_one_key_each(
+    world: World, app_engine: Any, admin: psycopg.Connection[Any]
+) -> None:
+    a = await sign_up(world, "lookup-a@example.com")
+    await sign_up(world, "lookup-b@example.com")
+    async with app_engine.begin() as conn:
+        found = (
+            await conn.execute(
+                text("SELECT id, password_hash FROM auth_user_by_email('LOOKUP-A@example.com')")
+            )
+        ).all()
+        assert [str(r.id) for r in found] == [a.me["user_id"]] and found[
+            0
+        ].password_hash.startswith("$argon2id$")
+        assert (
+            await conn.execute(
+                text("SELECT count(*) FROM auth_user_by_email('nobody@example.com')")
+            )
+        ).scalar_one() == 0
+        assert (
+            await conn.execute(text("SELECT count(*) FROM auth_session(decode('00', 'hex'))"))
+        ).scalar_one() == 0
+    # the function takes one address: there is no way through it to list people
+    for sql in (
+        "SELECT count(*) FROM auth_user_by_email('%')",
+        "SELECT count(*) FROM auth_user_by_email('')",
+    ):
+        async with app_engine.begin() as conn:
+            assert (await conn.execute(text(sql))).scalar_one() == 0
+    # a login that was deleted cannot be found, so it cannot sign in
+    admin.execute("UPDATE app_user SET deleted_at = now() WHERE email = 'lookup-a@example.com'")
+    async with app_engine.begin() as conn:
+        assert (
+            await conn.execute(
+                text("SELECT count(*) FROM auth_user_by_email('lookup-a@example.com')")
+            )
+        ).scalar_one() == 0
+    assert (
+        await a.client.get("/v1/auth/me")
+    ).status_code == 401  # and its open sessions stop working
+
+
+async def test_the_worker_role_has_no_way_into_other_peoples_logins(world: World) -> None:
+    await sign_up(world, "w@example.com")
+    dsn = APP_URL.replace("postgresql+asyncpg://", "postgresql://").replace(
+        "nigiwai_app:nigiwai-app-dev-only", "nigiwai_worker:nigiwai-worker-dev-only"
+    )
+    with psycopg.connect(dsn) as conn:
+        assert conn.execute("SELECT count(*) FROM app_user").fetchone() == (0,)
+        assert conn.execute("SELECT count(*) FROM app_session").fetchone() == (0,)
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            conn.execute("SELECT * FROM auth_user_by_email('w@example.com')")

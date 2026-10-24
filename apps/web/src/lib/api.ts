@@ -15,6 +15,14 @@ export const setCsrf = (token: string | null) => {
   csrfToken = token;
 };
 
+// A session that has ended (it expired, or the person signed out elsewhere) shows up as a 401 on whatever the page was doing. The owner
+// app registers a handler that sends the person to sign in again; pages with no session (the survey, the demo) register none.
+let onSessionEnded: (() => void) | null = null;
+export const setSessionEndedHandler = (handler: (() => void) | null) => {
+  onSessionEnded = handler;
+};
+const SESSION_FREE = /^\/(auth|invitations|public)\//;
+
 type Options = { method?: string; body?: unknown; signal?: AbortSignal };
 
 function describe(status: number, payload: unknown): ApiError {
@@ -53,6 +61,7 @@ export async function api<T>(path: string, { method = "GET", body, signal }: Opt
   } catch {
     /* a non-JSON body: fall through to the status-based message */
   }
+  if (response.status === 401 && !SESSION_FREE.test(path)) onSessionEnded?.();
   if (!response.ok) throw describe(response.status, payload);
   return payload as T;
 }
@@ -90,6 +99,8 @@ export type Questions = {
   max_picks: number;
   ask_age_band: boolean;
   ask_district: boolean;
+  /** The areas a guest chooses from; empty means they type a neighbourhood. */
+  districts: string[];
   ask_budget: boolean;
   picker_types: PickerType[];
 };

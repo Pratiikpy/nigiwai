@@ -283,3 +283,46 @@ test("account: a viewer is offered no way to delete the account, and can leave b
   await expect(page.getByTestId("team-member").first()).toContainText(ownerEmail);
   await guest.context.close();
 });
+
+test("account: a person left in no account can start a venue of their own, and start another from their login page", async ({ page }, info) => {
+  test.setTimeout(240_000);
+  const problems = watch(page);
+  const first = `Gone Soon ${Date.now().toString(36)}`;
+  await signUp(page, first);
+  await page.goto("/app/account");
+  const del = page.getByTestId("delete-account");
+  await del.locator("summary").click();
+  await del.getByTestId("delete-name").fill(first);
+  await del.getByLabel("Your password").fill(PASSWORD);
+  await del.getByTestId("delete-account-go").click();
+
+  // nothing left: the page says so and offers a way forward that is not a dead end
+  await expect(page.getByTestId("no-account")).toBeVisible();
+  const again = page.getByTestId("new-account");
+  await expect(again).toBeVisible();
+  await shot(page, info, "account-none-start");
+  await a11y(page, "no account, start a venue");
+  await expect(again.getByTestId("new-account-go")).toBeDisabled(); // no name yet
+  const second = `Fresh Start ${Date.now().toString(36)}`;
+  await again.getByLabel("Venue or business name").fill(second);
+  await again.getByTestId("new-account-go").click();
+  await expect(page).toHaveURL(/\/app$/);
+  await expect(page.getByRole("heading", { name: second, level: 1 })).toBeVisible();
+  await expect(page.locator(".side__who")).toContainText("owner");
+
+  // and a second venue beside it, from the login page; the menu then offers both
+  await page.goto("/app/account");
+  const third = `Side Room ${Date.now().toString(36)}`;
+  await page.getByTestId("new-account").getByLabel("Venue or business name").fill(third);
+  await page.getByTestId("new-account-go").click();
+  await expect(page).toHaveURL(/\/app$/);
+  await expect(page.getByRole("heading", { name: third, level: 1 })).toBeVisible();
+  await openMenu(page);
+  const switcher = page.locator("#account-switch");
+  await expect(switcher.locator("option")).toHaveCount(2);
+  await shot(page, info, "account-two-venues");
+  await a11y(page, "two venues");
+  const names = await switcher.locator("option").allInnerTexts();
+  expect(names.sort()).toEqual([second, third].sort());
+  expect(problems.filter((p) => !deliberate.test(p) && !prefetch.test(p))).toEqual([]);
+});

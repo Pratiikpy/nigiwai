@@ -576,3 +576,88 @@ async def test_survey_page_without_a_qloo_key_still_works(
                 "/v1/public/response", json=submission(venue.token, page["nonce"], ids[:3])
             )
         ).status_code == 201
+
+
+async def test_an_owner_can_give_the_areas_guests_choose_from_and_only_those_are_taken(
+    world: World, admin: psycopg.Connection[Any]
+) -> None:
+    owner = await sign_up(world)
+    venue = await make_venue(owner, questions={"districts": ["Eastside", "Old Town", "Riverside"]})
+    ids = seed_picks(admin)
+    guest = world.client()
+    page = await open_survey(guest, venue.token)
+    assert page["questions"]["districts"] == ["Eastside", "Old Town", "Riverside"]
+    for outside in ("Westside", "12 High Street", "me@example.com", "Eastside Annex"):
+        r = await guest.post(
+            "/v1/public/response",
+            json=submission(venue.token, page["nonce"], ids[:3], district=outside),
+        )
+        assert r.status_code == 422, (outside, r.status_code)
+    # the owner's spelling is what is stored, however the guest's browser cased it
+    ok = await guest.post(
+        "/v1/public/response",
+        json=submission(venue.token, page["nonce"], ids[:3], district="  old   TOWN "),
+    )
+    assert ok.status_code == 201, ok.text
+    assert admin.execute("SELECT district FROM response").fetchone() == ("Old Town",)
+    # skipping is still allowed: the question is optional
+    other = world.client()
+    page2 = await open_survey(other, venue.token)
+    skipped = await other.post(
+        "/v1/public/response", json=submission(venue.token, page2["nonce"], ids[:3])
+    )
+    assert skipped.status_code == 201
+    assert admin.execute("SELECT count(*) FROM response WHERE district IS NULL").fetchone() == (1,)
+
+
+async def test_the_list_of_areas_is_checked_when_the_owner_saves_it(world: World) -> None:
+    owner = await sign_up(world)
+    biz = (
+        await owner.post(
+            "/businesses", json={"name": "The Lantern", "type": "bar", "currency": "GBP"}
+        )
+    ).json()
+
+    def put(areas: Any) -> Any:
+        return owner.put(
+            f"/businesses/{biz['id']}/survey",
+            json={"questions": {"districts": areas}, "publish": False},
+        )
+
+    assert (await put(["Eastside", "Old Town"])).status_code == 200
+    for bad in (
+        ["Eastside", "eastside"],  # twice
+        ["Café", "Cafe"],  # twice, apart from an accent
+        ["me@example.com"],
+        ["10 Downing Street 12345"],
+        ["x" * 41],
+        [""],
+        ["line\nbreak"],
+        [f"Area {i}" for i in range(13)],
+        "Eastside",  # not a list
+        [5],
+    ):
+        r = await put(bad)
+        assert r.status_code == 422, (bad, r.status_code)
+    # with no list the question stays free text, as before
+    assert (
+        await owner.put(f"/businesses/{biz['id']}/survey", json={"questions": {}, "publish": False})
+    ).json()["questions"]["districts"] == []
+
+
+async def test_a_list_of_areas_means_nothing_free_is_collected_even_with_a_hostile_client(
+    world: World, admin: psycopg.Connection[Any]
+) -> None:
+    owner = await sign_up(world)
+    venue = await make_venue(owner, questions={"districts": ["Eastside"]})
+    ids = seed_picks(admin)
+    guest = world.client()
+    page = await open_survey(guest, venue.token)
+    r = await guest.post(
+        "/v1/public/response",
+        json=submission(
+            venue.token, page["nonce"], ids[:3], district="Flat 4, 221B Baker Street, London"
+        ),
+    )
+    assert r.status_code == 422
+    assert admin.execute("SELECT count(*) FROM response").fetchone() == (0,)

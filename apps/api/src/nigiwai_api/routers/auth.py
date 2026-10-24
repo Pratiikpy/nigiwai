@@ -44,7 +44,7 @@ async def _create_session(state, response: Response, user_id) -> str:  # type: i
     token = new_token(32)
     csrf_secret = new_token(16)
     ttl = timedelta(days=state.settings.session_ttl_days)
-    async with state.engine.begin() as conn:
+    async with transaction(state.engine, user_id=user_id) as conn:
         await conn.execute(
             text(
                 "INSERT INTO app_session (user_id, token_hash, csrf_secret, expires_at) VALUES (:u, :h, :c, :e)"
@@ -125,10 +125,7 @@ async def login(body: LoginIn, request: Request, response: Response, state: Stat
     async with state.engine.begin() as conn:
         row = (
             await conn.execute(
-                text(
-                    "SELECT id, password_hash FROM app_user WHERE email = :e AND deleted_at IS NULL"
-                ),
-                {"e": email},
+                text("SELECT id, password_hash FROM auth_user_by_email(:e)"), {"e": email}
             )
         ).first()
     stored = row.password_hash if row else None
@@ -137,7 +134,7 @@ async def login(body: LoginIn, request: Request, response: Response, state: Stat
             status_code=401, detail="email or password is wrong"
         )  # one answer for both cases
     if needs_rehash(row.password_hash):
-        async with state.engine.begin() as conn:
+        async with transaction(state.engine, user_id=row.id) as conn:
             await conn.execute(
                 text("UPDATE app_user SET password_hash = :p WHERE id = :i"),
                 {"p": hash_password(body.password), "i": row.id},
@@ -148,7 +145,7 @@ async def login(body: LoginIn, request: Request, response: Response, state: Stat
 
 @router.post("/logout", status_code=204)
 async def logout(request: Request, response: Response, state: State, session: Session) -> Response:
-    async with state.engine.begin() as conn:
+    async with transaction(state.engine, user_id=session.user_id) as conn:
         await conn.execute(text("DELETE FROM app_session WHERE id = :i"), {"i": session.session_id})
     response.delete_cookie(state.settings.session_cookie, path="/")
     response.status_code = 204

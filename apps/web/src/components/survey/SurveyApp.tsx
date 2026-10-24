@@ -839,7 +839,25 @@ function AboutScreen({
           </fieldset>
         ) : null}
 
-        {q.ask_district ? (
+        {q.ask_district && q.districts?.length ? (
+          <fieldset className="qset" data-testid="district-choices">
+            <legend>Where do you usually spend your day?</legend>
+            <div className="chips">
+              {q.districts.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  className="chipbtn"
+                  aria-pressed={district === name}
+                  onClick={() => setDistrict(district === name ? "" : name)}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+            <p className="field__hint">Tap again to clear.</p>
+          </fieldset>
+        ) : q.ask_district ? (
           <div className="field">
             <label htmlFor="district">Where do you usually spend your day?</label>
             <input

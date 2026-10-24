@@ -7,7 +7,7 @@ import { Icon } from "@/components/Icon";
 import { Loading, Notice, PageHead } from "@/components/owner/ui";
 import { ApiError, api, setCsrf, type Me } from "@/lib/api";
 import type { AccountDoc, AccountRow } from "@/lib/account";
-import { useSession } from "@/lib/session";
+import { rememberAccount, useSession } from "@/lib/session";
 import { ROLE_NAME } from "@/lib/team";
 
 const message = (e: unknown, fallback: string) => (e instanceof ApiError ? e.detail : fallback);
@@ -161,6 +161,37 @@ function DeleteAccount({ row, onDeleted }: { row: AccountRow; onDeleted: () => P
   );
 }
 
+/** Start another venue from this login. Used on the login page and on the page a person sees when they are in no account. */
+export function NewAccount({ lead }: { lead: string }) {
+  const router = useRouter();
+  const { adopt } = useSession();
+  const [name, setName] = useState("");
+  const { busy, problem, run } = useAction();
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    void run(async () => {
+      const made = await api<{ id: string }>("/account/accounts", { method: "POST", body: { business_name: name } });
+      rememberAccount(made.id);
+      adopt(await api<Me>("/auth/me"));
+      router.replace("/app");
+    }, "We couldn’t start that venue.");
+  };
+  return (
+    <form className="stack" onSubmit={submit} noValidate data-testid="new-account">
+      <p className="muted">{lead}</p>
+      <div className="field">
+        <label htmlFor="na-name">Venue or business name</label>
+        <input className="input" id="na-name" maxLength={120} autoComplete="off" value={name} onChange={(e) => setName(e.target.value)} />
+      </div>
+      {problem ? <Notice tone="error">{problem}</Notice> : null}
+      <button className="btn btn--primary btn--fit" type="submit" data-testid="new-account-go" disabled={busy || !name.trim()}>
+        <Icon name="plus" />
+        Start this venue
+      </button>
+    </form>
+  );
+}
+
 /** Delete the person: their sign-in and their place in every account. Used here and on the page shown to someone in no account. */
 export function DeleteLogin({ onDeleted }: { onDeleted: () => void }) {
   const [password, setPassword] = useState("");
@@ -268,6 +299,8 @@ export function AccountWorkspace() {
             </li>
           ))}
         </ul>
+        <h3 className="tm-sub">Start another venue</h3>
+        <NewAccount lead="A second venue or business, with its own survey, posters and people. You switch between your accounts from the menu." />
         <DeleteLogin
           onDeleted={() => {
             setCsrf(null);

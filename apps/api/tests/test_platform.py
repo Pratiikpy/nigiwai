@@ -60,6 +60,8 @@ async def test_security_headers_on_every_response(world: Any) -> None:
         assert r.headers["x-content-type-options"] == "nosniff", path
         assert r.headers["referrer-policy"] == "no-referrer", path
         assert r.headers["cache-control"] == "no-store", path
+        assert r.headers["x-frame-options"] == "DENY", path
+        assert "frame-ancestors 'none'" in r.headers["content-security-policy"], path
 
 
 async def test_unknown_routes_and_methods(world: Any) -> None:

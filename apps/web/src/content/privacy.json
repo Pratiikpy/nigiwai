@@ -4,7 +4,7 @@
   "stored_per_answer": [
     { "what": "About five favourite things, chosen from a list (a kind and an identifier each, in the order chosen)", "table": "pick", "columns": ["entity_id", "entity_type", "position"] },
     { "what": "Optionally: an age range", "table": "response", "columns": ["age_band"] },
-    { "what": "Optionally: a district, as a short place name", "table": "response", "columns": ["district"] },
+    { "what": "Optionally: an area, either one of the areas the venue lists or a short place name", "table": "response", "columns": ["district"] },
     { "what": "Optionally: a budget level from 1 to 4", "table": "response", "columns": ["budget"] },
     { "what": "Which poster was scanned, and the venue's survey it belongs to", "table": "response", "columns": ["qr_point_id", "survey_id", "survey_version"] },
     { "what": "The day, weekday and hour of the answer in the venue's own time (never the exact moment)", "table": "response", "columns": ["local_date", "local_weekday", "local_hour"] },

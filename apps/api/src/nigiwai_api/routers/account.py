@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import EmailStr, Field
 
 from ..deps import Session, State, Tenant, client_ip_hash
-from ..schemas import Strict
+from ..schemas import Name, Strict
 from ..services import account as service
 
 router = APIRouter(prefix="/v1/account", tags=["account"])
@@ -30,6 +30,10 @@ class ConfirmIn(Strict):
 class DeleteAccountIn(Strict):
     password: str = Secret
     confirm_name: str = Field(min_length=1, max_length=200)
+
+
+class NewAccountIn(Strict):
+    business_name: Name
 
 
 class RecoverIn(Strict):
@@ -78,6 +82,15 @@ async def recovery_code(body: ConfirmIn, state: State, session: Session) -> dict
                 state.engine, session.user_id, body.password
             )
         }
+    except service.AccountError as exc:
+        raise _refused(exc) from exc
+
+
+@router.post("/accounts", status_code=201)
+async def new_account(body: NewAccountIn, state: State, session: Session) -> dict[str, str]:
+    await _guarded(state, f"new:{session.user_id}", 3, 3600.0)
+    try:
+        return await service.new_account(state.engine, session.user_id, body.business_name)
     except service.AccountError as exc:
         raise _refused(exc) from exc
 

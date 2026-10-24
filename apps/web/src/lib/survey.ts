@@ -88,6 +88,24 @@ export function districtProblem(value: string): string | null {
   return null;
 }
 
+/** The owner's list of areas, typed as one line with commas: each a short name, none repeated, at most twelve. */
+export function parseAreas(line: string): { areas: string[]; problem: string | null } {
+  const areas: string[] = [];
+  const seen = new Set<string>();
+  for (const part of line.split(/[,\n;]/)) {
+    const name = part.trim().replace(/\s+/g, " ");
+    if (!name) continue;
+    const problem = districtProblem(name);
+    if (problem || name.length > 40) return { areas, problem: name.length > 40 ? `“${name.slice(0, 20)}…” is longer than 40 characters.` : problem };
+    const key = name.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
+    if (seen.has(key)) return { areas, problem: `“${name}” is listed twice.` };
+    seen.add(key);
+    areas.push(name);
+  }
+  if (areas.length > 12) return { areas, problem: "At most twelve areas." };
+  return { areas, problem: null };
+}
+
 // ---- the draft kept in the browser so a reload does not lose the picks -------------------------------------------
 export type Draft = {
   picks: PickerItem[];

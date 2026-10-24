@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Icon, type IconName } from "@/components/Icon";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { DeleteLogin } from "@/components/owner/AccountWorkspace";
+import { DeleteLogin, NewAccount } from "@/components/owner/AccountWorkspace";
 import { useSession } from "@/lib/session";
 import { MODULE_OF_PATH } from "@/lib/onboarding";
 import { VenueProvider, useVenue } from "@/lib/venue";
@@ -77,8 +77,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <h1 className="display">You are not in an account.</h1>
           <p className="muted">
             {state.me.email} is not part of any venue&rsquo;s account right now. If someone invited you, open the invitation link they sent while you are signed in
-            as this address. Otherwise you can sign out.
+            as this address.
           </p>
+          <NewAccount lead="Or start a venue of your own:" />
           <button className="btn" type="button" onClick={() => void signOut()}>
             Sign out
           </button>

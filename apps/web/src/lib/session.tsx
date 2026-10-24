@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { ApiError, api, setCsrf, type Me, type Tenant } from "./api";
+import { ApiError, api, setCsrf, setSessionEndedHandler, type Me, type Tenant } from "./api";
 
 type SessionState =
   | { status: "loading" }
@@ -55,13 +55,26 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     else setState({ status: "ready", me, tenant });
   }, []);
 
+  // When the session ends while the owner is working, go to sign in and come back to this page afterwards.
+  useEffect(() => {
+    setSessionEndedHandler(() => {
+      setCsrf(null);
+      const here = `${window.location.pathname}${window.location.search}`;
+      router.replace(`/login?next=${encodeURIComponent(here)}`);
+    });
+    return () => setSessionEndedHandler(null);
+  }, [router]);
+
   useEffect(() => {
     let live = true;
     api<Me>("/auth/me")
       .then((me) => live && adopt(me))
       .catch((error: unknown) => {
         if (!live) return;
-        if (error instanceof ApiError && error.status === 401) router.replace("/login");
+        if (error instanceof ApiError && error.status === 401) {
+          const here = `${window.location.pathname}${window.location.search}`;
+          router.replace(here === "/app" ? "/login" : `/login?next=${encodeURIComponent(here)}`);
+        }
         else setState({ status: "error", message: error instanceof ApiError ? error.detail : "Something went wrong." });
       });
     return () => {

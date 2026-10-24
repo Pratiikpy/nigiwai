@@ -254,6 +254,10 @@ def create_app(
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("Referrer-Policy", "no-referrer")
         response.headers.setdefault("Cache-Control", "no-store")
+        # What the API returns (data, PDFs, images) is never a page to be framed. The web app sends the full policy for its own pages;
+        # a reply proxied through it carries these.
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Content-Security-Policy", "frame-ancestors 'none'")
         return response
 
     @app.exception_handler(RequestValidationError)

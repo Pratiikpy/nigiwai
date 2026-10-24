@@ -10,6 +10,12 @@ import { ApiError, api, setCsrf, type Me } from "@/lib/api";
 
 type Mode = "login" | "signup";
 
+/** Where to go after signing in: back to the page the person was on when their session ended, if it is one of our own owner pages. */
+function whereNext(): string {
+  const next = new URLSearchParams(window.location.search).get("next");
+  return next && /^\/app(\/[A-Za-z0-9_\-./?=&%]*)?$/.test(next) && !next.includes("//") && !next.includes("..") ? next : "/app";
+}
+
 /** One form for both sign-in and sign-up. The server's wording is shown as it comes: it never says which half was wrong. */
 export function AuthForm({ mode }: { mode: Mode }) {
   const router = useRouter();
@@ -38,7 +44,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
         setBusy(false);
         return;
       }
-      router.replace("/app");
+      router.replace(whereNext());
     } catch (e) {
       setError(e instanceof ApiError ? e.detail : "Something went wrong. Please try again.");
       setBusy(false);
@@ -50,7 +56,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
       <div className="auth__card card">
         <Logo />
         {recovery ? (
-          <RecoveryCode code={recovery} email={email} heading="Your account is ready" onDone={() => router.replace("/app")} />
+          <RecoveryCode code={recovery} email={email} heading="Your account is ready" onDone={() => router.replace(whereNext())} />
         ) : (
           <>
         <div>

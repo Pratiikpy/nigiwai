@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from datetime import datetime
 from typing import Annotated, Literal
@@ -237,6 +238,32 @@ ALL_PICKER_TYPES: tuple[PickerType, ...] = (
 )
 
 
+# ---- an area name ----------------------------------------------------------------------------------------------
+_AREA_BAD = re.compile(r"[@]|https?:|www\.|\d{5,}", re.IGNORECASE)
+AREA_MESSAGE = "Please give just the name of your area, for example 'Eastside'."
+MAX_AREAS = 12
+
+
+def area_name(value: str, *, longest: int = 60) -> str | None:
+    """A short place name, or None when nothing is left of it. It is kept to a name: no addresses, emails, links or long numbers, and
+    no control or invisible characters (newlines, zero-width marks, bidi overrides). Raises ValueError with a message fit to show."""
+    normalised = unicodedata.normalize("NFC", value)
+    if any(unicodedata.category(ch) in ("Cc", "Cf", "Cs", "Co") for ch in normalised):
+        raise ValueError(AREA_MESSAGE)
+    cleaned = " ".join(normalised.split())
+    if not cleaned:
+        return None
+    if len(cleaned) > longest or _AREA_BAD.search(cleaned):
+        raise ValueError(AREA_MESSAGE)
+    return cleaned
+
+
+def area_key(value: str) -> str:
+    """How two spellings of one area are told to be the same: case and accents do not make a new one."""
+    folded = unicodedata.normalize("NFKD", value.casefold())
+    return "".join(ch for ch in folded if not unicodedata.combining(ch))
+
+
 # ---- survey ---------------------------------------------------------------------------------------------------
 class SurveyQuestions(Strict):
     """The core ask is the picks; the three extras are optional and each says who sees the answer."""
@@ -249,6 +276,23 @@ class SurveyQuestions(Strict):
     picker_types: list[PickerType] = Field(
         default_factory=lambda: list(ALL_PICKER_TYPES), min_length=1
     )
+    # The areas guests choose from. Empty means the guest types a neighbourhood; with a list there is no free text to collect at all.
+    districts: list[str] = Field(default_factory=list, max_length=MAX_AREAS)
+
+    @field_validator("districts")
+    @classmethod
+    def _areas_are_names(cls, value: list[str]) -> list[str]:
+        out: list[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            name = area_name(raw, longest=40)
+            if name is None:
+                raise ValueError("an area name cannot be empty")
+            if area_key(name) in seen:
+                raise ValueError(f"'{name}' is listed twice")
+            seen.add(area_key(name))
+            out.append(name)
+        return out
 
     @model_validator(mode="after")
     def _min_not_above_max(self) -> SurveyQuestions:
