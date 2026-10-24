@@ -5,11 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .encoding import looks_like_mojibake
-from .models import Entity, EntityType, GuardStatus, QlooWarning, RuleEvent, norm_name
+from .models import Entity, EntityType, GeoPoint, GuardStatus, QlooWarning, RuleEvent, norm_name
 from .requests import LEAKAGE_TAG_FRAGMENTS, PlaceInsights, _InsightsBase
 
 FLAT_EPSILON = 1e-6
 RADIUS_SLACK = 1.02  # Qloo rounds distances; allow 2% before calling a place outside the area
+DUPLICATE_PLACE_M = 150.0  # same-named places closer than this are one place
 
 
 @dataclass
@@ -24,10 +25,17 @@ def _event(rule: str, effect: str, detail: str, count: int = 1) -> RuleEvent:
     return RuleEvent(rule=rule, stage="post", effect=effect, detail=detail, count=count)  # type: ignore[arg-type]
 
 
+def _same_item(a: GeoPoint | None, b: GeoPoint | None) -> bool:
+    """Two entities with one name are one item unless both have a position and the positions are far apart."""
+    if a is None or b is None:
+        return True
+    return a.distance_m(b) <= DUPLICATE_PLACE_M
+
+
 def dedupe(items: list[Entity], exclude_ids: set[str]) -> tuple[list[Entity], list[RuleEvent]]:
     """Trap 18: dedupe by id, then by NFC-casefolded name plus subtype; seeds never appear in their own results."""
     seen_ids: set[str] = set()
-    seen_names: set[tuple[str, str]] = set()
+    seen_names: dict[tuple[str, str], list[GeoPoint | None]] = {}
     out: list[Entity] = []
     removed_seed = removed_id = removed_name = 0
     for e in items:
@@ -38,11 +46,14 @@ def dedupe(items: list[Entity], exclude_ids: set[str]) -> tuple[list[Entity], li
             removed_id += 1
             continue
         key = (norm_name(e.name), e.subtype or e.primary_type)
-        if key in seen_names:
+        earlier = seen_names.get(key, [])
+        # The same name is the same item, except for a place: two bars called the same in different cities are two
+        # places, and only ones within DUPLICATE_PLACE_M of each other are one.
+        if any(_same_item(e.location, other) for other in earlier):
             removed_name += 1
             continue
         seen_ids.add(e.entity_id)
-        seen_names.add(key)
+        seen_names.setdefault(key, []).append(e.location)
         out.append(e)
     events: list[RuleEvent] = []
     if removed_seed:

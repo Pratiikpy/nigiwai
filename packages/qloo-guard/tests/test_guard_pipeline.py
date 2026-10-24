@@ -111,6 +111,21 @@ async def test_search_drops_wrong_types_and_duplicates(make_rig: Any) -> None:
     assert (await rig.registry.get(person["entity_id"])) is None  # persons never enter the registry
 
 
+async def test_two_places_with_one_name_in_different_cities_are_two_places_but_a_nearby_repeat_is_one(
+    make_rig: Any,
+) -> None:
+    here = {**place_raw("Corner Tap", 100.0), "location": {"lat": 40.7200, "lon": -73.9900}}
+    # the same bar listed twice, about 35 m away
+    again = {**place_raw("corner tap", 100.0), "location": {"lat": 40.7203, "lon": -73.9901}}
+    # a bar of that name in another city
+    elsewhere = {**place_raw("Corner Tap", 100.0), "location": {"lat": 34.0522, "lon": -118.2437}}
+    rig = make_rig(FakeTransport(respond=lambda p, q: ok(search_body(here, again, elsewhere))))
+    req = SearchRequest(query="Corner Tap", types=(EntityType.PLACE,), take=5)
+    res = await rig.guard.search(req, rig.guard.new_context("picker"))
+    assert [e.entity_id for e in res.items] == [here["entity_id"], elsewhere["entity_id"]]
+    assert any(e.rule == "T18-name" and e.count == 1 for e in res.rule_events)
+
+
 async def test_replay_serves_recorded_responses_and_fails_closed(make_rig: Any) -> None:
     rig = make_rig(FakeTransport(respond=lambda p, q: ok(search_body(artist_raw()))))
     await rig.guard.search(search_req(), rig.guard.new_context("picker"))

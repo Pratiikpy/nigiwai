@@ -22,7 +22,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from .db import assert_rls_effective, make_engine
 from .deps import AppState
 from .ratelimit import RateLimiter
-from .routers import auth, brief, demo, health, owner, public, soundcheck, today, trust
+from .routers import ask, auth, brief, demo, health, owner, public, soundcheck, today, trust
 from .routers import map as map_router
 from .services.geocode import Geocoder
 from .services.guard_stores import PgBackedLedger, PgRecorder, PgRegistry, PgResponseStore
@@ -260,6 +260,7 @@ def create_app(
     app.include_router(map_router.router)
     app.include_router(demo.router)
     app.include_router(today.router)
+    app.include_router(ask.router)
     app.include_router(trust.public)
     app.include_router(trust.owner)
     app.include_router(public.router)
