@@ -1,6 +1,6 @@
 # Nigiwai for the Qloo LLM Hackathon
 
-This page answers the six points of the submission guide. The product is live-demoable without an account at `/` and `/try`, and the repository shows it three ways without running anything: screenshots of the owner and guest screens made from a made-up room (no Qloo data in them, [docs/screenshots](screenshots)), three sample Booking Briefs for the demo venues ([docs/samples](samples), which carry Qloo-derived act names and genre labels, so they are subject to the open question in the last section), and the text below.
+This page answers the six points of the submission guide. The product is live-demoable without an account at `/` and `/try`, and the repository shows it three ways without running anything: screenshots of the owner and guest screens made from a made-up room (no Qloo data in them, [docs/screenshots](screenshots)), and the text below. The three sample Booking Briefs for the demo venues are made locally by `just samples` and are not committed, because they carry Qloo-derived genre labels (the open question in the last section).
 
 ## 1. The problem
 
@@ -50,7 +50,7 @@ Entity and tag choices: seeds are artists only; an artist is used as a seed only
 
 ## 4. Seeing it
 
-Open the front page, choose a venue, pick a suggested act or search any artist, and open "The Qloo calls behind this score". The three demo venues are Mercury Lounge (New York), The Hideout and Empty Bottle (Chicago); `/try` also builds any other music venue you search for, from its public lineups, in a few minutes. Without running anything: the README shows the sample Booking Briefs, and [docs/screenshots](screenshots) shows a made-up room's Today board, groups, crowd map, Sound plan and brief, the guest survey and the Taste Card on a phone, and the public pages. Every screenshot there is made by `e2e/showcase.spec.ts` from invented guests and acts, with no Qloo data and no real person's details.
+Open the front page, choose a venue, pick a suggested act or search any artist, and open "The Qloo calls behind this score". The three demo venues are Mercury Lounge (New York), The Hideout and Empty Bottle (Chicago); `/try` also builds any other music venue you search for, from its public lineups, in a few minutes. Without running anything: [docs/screenshots](screenshots) shows a made-up room's Today board, groups, crowd map, Sound plan and brief, the guest survey and the Taste Card on a phone, and the public pages. Every screenshot there is made by `e2e/showcase.spec.ts` from invented guests and acts, with no Qloo data and no real person's details.
 
 ## 5. Running it from a clean environment
 

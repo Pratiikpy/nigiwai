@@ -1,5 +1,5 @@
-"""The sample Booking Briefs in docs/samples (PRD M25): real PDFs, one page each, labelled as modelled, holding no identifiers, and
-every one linked from the README with its preview image."""
+"""The sample Booking Briefs `just samples` saves to docs/samples (PRD M25): real PDFs, one page each, labelled as modelled, holding no
+identifiers, each with a preview image. The folder is not committed (docs/HUMAN.md H8), so these run where it has been made."""
 
 from __future__ import annotations
 
@@ -11,6 +11,10 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 SAMPLES = ROOT / "docs" / "samples"
+pytestmark = pytest.mark.skipif(
+    not SAMPLES.is_dir(),
+    reason="docs/samples is made locally by `just samples`; it is not committed (docs/HUMAN.md H8)",
+)
 VENUES = {
     "mercury-lounge": "MERCURY LOUNGE",
     "the-hideout": "THE HIDEOUT",
@@ -40,9 +44,6 @@ def test_a_sample_brief_is_the_real_one_page_document_for_its_venue(slug: str, n
 
 
 @pytest.mark.parametrize("slug", VENUES)
-def test_a_sample_has_a_preview_and_is_linked_from_the_readme(slug: str) -> None:
+def test_a_sample_has_a_preview_image(slug: str) -> None:
     preview = SAMPLES / f"booking-brief-{slug}.png"
     assert preview.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n" and preview.stat().st_size > 20_000
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert f"(docs/samples/booking-brief-{slug}.png)" in readme
-    assert f"(docs/samples/booking-brief-{slug}.pdf)" in readme

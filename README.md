@@ -32,11 +32,7 @@ Status: work in progress. [docs/BUILD_STATE.md](docs/BUILD_STATE.md) says exactl
 
 ## Sample Booking Briefs
 
-The deliverable, without running anything: the one-page brief an owner forwards to a booker, for each of the three demo venues. They are the real PDFs a visitor downloads from `/try`, saved by `just samples`. Each is **modelled from public lineups** (MusicBrainz), not from guests, holds item names, up to three genre labels for each act and our own scores, and says how every number was computed. Whether Qloo allows showing its output in this form publicly is not confirmed (docs/HUMAN.md, H8): remove `docs/samples` before any public push until it is.
-
-| Mercury Lounge, New York | The Hideout, Chicago | Empty Bottle, Chicago |
-|---|---|---|
-| [![Booking Brief for Mercury Lounge](docs/samples/booking-brief-mercury-lounge.png)](docs/samples/booking-brief-mercury-lounge.pdf) | [![Booking Brief for The Hideout](docs/samples/booking-brief-the-hideout.png)](docs/samples/booking-brief-the-hideout.pdf) | [![Booking Brief for Empty Bottle](docs/samples/booking-brief-empty-bottle.png)](docs/samples/booking-brief-empty-bottle.pdf) |
+The deliverable is the one-page brief an owner forwards to a booker. Open `/try`, choose a demo venue, check an act and download its Booking Brief, or run `just samples` to save one PDF and PNG per demo venue to `docs/samples` (not committed: each holds item names and up to three genre labels for each act, and whether Qloo allows showing its output in that form publicly is not confirmed, docs/HUMAN.md H8). Each brief is **modelled from public lineups** (MusicBrainz), not from guests, holds item names, genre labels and our own scores, and says how every number was computed.
 
 ## Screenshots
 
