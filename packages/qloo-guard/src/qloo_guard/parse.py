@@ -19,7 +19,29 @@ from .models import (
 )
 
 MAX_TAGS = 10
+MAX_PLACE_TAGS = 20
 MAX_DESCRIPTION = 160
+
+# Qloo lists a busy place with 85 to 200 tags (probed live, 2026-10-25), and the first ten are mostly not taste: how to pay, whether the
+# entrance is level, the neighbourhood. Some describe other people: who the customers are ("Lgbtq+", "Students"), who owns the place,
+# which diet it serves ("Halal", "Celiac friendly"), the causes its crowd cares about. A place keeps only the tags that say what it is,
+# what it serves and how it feels, up to twenty, and the rest are never stored: nothing reads them, and holding them would be holding
+# claims about people for no use. This is the same set the groups engine reads a place through (`nigiwai_tribes.places`); a test in the
+# API keeps the two equal.
+PLACE_TASTE_NAMESPACES: frozenset[str] = frozenset(
+    {
+        "genre",
+        "category",
+        "cuisine",
+        "culinary_style",
+        "menu_highlight",
+        "beverage_offering",
+        "specialty_dish",
+        "ambience",
+        "decor",
+        "activity_type",
+    }
+)
 
 
 def _dict(value: Any) -> dict[str, Any]:
@@ -50,8 +72,55 @@ def _geo(raw: Any) -> GeoPoint | None:
     return None
 
 
-def _tags(raw: Any) -> tuple[EntityTag, ...]:
+def _namespace(tag_id: str) -> str:
+    """`urn:tag:ambience:qloo:lively` -> `ambience`; a tag id in any other shape has no namespace."""
+    parts = tag_id.split(":")
+    return parts[2] if len(parts) > 3 and parts[0] == "urn" and parts[1] == "tag" else ""
+
+
+def _is_place(entity: dict[str, Any]) -> bool:
+    kinds = [*(entity.get("types") or []), entity.get("subtype"), entity.get("type")]
+    return any(isinstance(k, str) and k.startswith("urn:entity:place") for k in kinds)
+
+
+def minimise_places(body: Any) -> Any:
+    """The same rule as `_tags`, applied to a whole Qloo answer before it is cached: a place keeps only its taste tags. The private cache
+    holds the answer as Qloo sent it, so without this it would hold, for every place searched, the customers, owners and diets Qloo
+    lists for it, which the product never reads and never shows. Anything that is not a place is returned untouched."""
+    if not isinstance(body, dict):
+        return body
+    results = body.get("results")
+    if isinstance(results, list):
+        entities = results
+    elif isinstance(results, dict) and isinstance(results.get("entities"), list):
+        entities = results["entities"]
+    else:
+        return body
+    changed = False
+    cleaned: list[Any] = []
+    for entity in entities:
+        if isinstance(entity, dict) and _is_place(entity) and isinstance(entity.get("tags"), list):
+            kept = [
+                t
+                for t in entity["tags"]
+                if isinstance(t, dict)
+                and _namespace(str(t.get("tag_id") or t.get("id") or "")) in PLACE_TASTE_NAMESPACES
+            ][:MAX_PLACE_TAGS]
+            if len(kept) != len(entity["tags"]):
+                entity = {**entity, "tags": kept}
+                changed = True
+        cleaned.append(entity)
+    if not changed:
+        return body
+    return {
+        **body,
+        "results": cleaned if isinstance(results, list) else {**results, "entities": cleaned},
+    }
+
+
+def _tags(raw: Any, *, place: bool = False) -> tuple[EntityTag, ...]:
     out: list[EntityTag] = []
+    cap = MAX_PLACE_TAGS if place else MAX_TAGS
     if isinstance(raw, list):
         for t in raw:
             if not isinstance(t, dict):
@@ -59,6 +128,8 @@ def _tags(raw: Any) -> tuple[EntityTag, ...]:
             tag_id = t.get("tag_id") or t.get("id")  # search uses tag_id, insights uses id
             name = t.get("name")
             if isinstance(tag_id, str) and isinstance(name, str):
+                if place and _namespace(tag_id) not in PLACE_TASTE_NAMESPACES:
+                    continue
                 out.append(
                     EntityTag(
                         tag_id=tag_id,
@@ -66,7 +137,7 @@ def _tags(raw: Any) -> tuple[EntityTag, ...]:
                         type=t.get("type") if isinstance(t.get("type"), str) else None,
                     )
                 )
-            if len(out) >= MAX_TAGS:
+            if len(out) >= cap:
                 break
     return tuple(out)
 
@@ -120,7 +191,7 @@ def parse_entity(raw: dict[str, Any]) -> Entity | None:
             popularity=float(raw["popularity"])
             if isinstance(raw.get("popularity"), int | float)
             else None,
-            tags=_tags(raw.get("tags")),
+            tags=_tags(raw.get("tags"), place=any(t.startswith("urn:entity:place") for t in types)),
             description=description,
             image_url=image if isinstance(image, str) else None,
             location=_geo(raw.get("location")),

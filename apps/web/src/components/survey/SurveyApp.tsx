@@ -23,8 +23,10 @@ import {
   districtProblem,
   loadDraft,
   metaLine,
+  PLACE_PLACEHOLDER,
   parseConsent,
   pickProgress,
+  SEARCH_PLACEHOLDER,
   saveDraft,
 } from "@/lib/survey";
 import { ShareSheet, TasteCard } from "./TasteCard";
@@ -635,7 +637,7 @@ function PickScreen({
               autoCapitalize="off"
               spellCheck={false}
               maxLength={80}
-              placeholder="Band, show, film, book or brand"
+              placeholder={category === "place" ? PLACE_PLACEHOLDER : SEARCH_PLACEHOLDER}
               aria-controls="results"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -709,7 +711,7 @@ function PickScreen({
                         onClick={() => (picked ? onRemove(item.entity_id) : void add(item))}
                         aria-pressed={picked}
                         disabled={(full && !picked) || (pendingId !== null && !pending)}
-                        aria-label={`${picked ? "Remove" : "Add"} ${item.name}`}
+                        aria-label={`${picked ? "Added: remove" : "Add"} ${item.name}`}
                       >
                         {pending ? (
                           <>
@@ -748,8 +750,12 @@ function PickScreen({
                     <circle cx="20" cy="70" r="4" fill="var(--brand)" stroke="none" />
                   </svg>
                 </div>
-                <h2>Nothing called “{shown.q}” yet.</h2>
-                <p>Check the spelling, or try just the name of the band or title. You can also look in another category.</p>
+                <h2>Nothing called “{shown.q}”{category === "place" ? " near here" : ""} yet.</h2>
+                <p>
+                  {category === "place"
+                    ? "Check the spelling, or try just the name of the place. You can also look in another category."
+                    : "Check the spelling, or try just the name of the band or title. You can also look in another category."}
+                </p>
                 {shown.note ? <p className="res-note">{shown.note}</p> : null}
                 <button className="btn btn--sm" type="button" onClick={() => setQuery("")}>
                   Clear search

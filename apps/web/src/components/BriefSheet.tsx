@@ -133,7 +133,7 @@ export function BriefSheet({ doc }: { doc: Brief }) {
         {doc.notes.slice(1).map((n) => (
           <p key={n}>{n}</p>
         ))}
-        <p>Taste data from Qloo. This brief holds item names and our own scores only, and groups under 10 people are never shown.</p>
+        <p>Taste data from Qloo. This brief holds item names, genre labels and our own scores only, and groups under 10 people are never shown.</p>
       </footer>
     </article>
   );

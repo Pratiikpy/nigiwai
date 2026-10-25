@@ -69,6 +69,12 @@ services:
       NIGIWAI_LLM_API_KEY: ${NIGIWAI_LLM_API_KEY:-}
       NIGIWAI_LLM_EXTRA_BODY: ${NIGIWAI_LLM_EXTRA_BODY:-}
       NIGIWAI_LINEUP_CONTACT: ${NIGIWAI_LINEUP_CONTACT:?set NIGIWAI_LINEUP_CONTACT (a URL or email that identifies you to MusicBrainz and Nominatim)}
+      # Judge mode: what anonymous visitors may spend, for the whole site, per day (each new check or venue calls Qloo)
+      NIGIWAI_DEMO_RUNS_PER_DAY: ${NIGIWAI_DEMO_RUNS_PER_DAY:-60}
+      NIGIWAI_DEMO_SEARCHES_PER_DAY: ${NIGIWAI_DEMO_SEARCHES_PER_DAY:-300}
+      NIGIWAI_DEMO_COMPARES_PER_DAY: ${NIGIWAI_DEMO_COMPARES_PER_DAY:-100}
+      NIGIWAI_DEMO_REQUESTS_PER_DAY: ${NIGIWAI_DEMO_REQUESTS_PER_DAY:-5}
+      NIGIWAI_DEMO_PLACE_SEARCHES_PER_DAY: ${NIGIWAI_DEMO_PLACE_SEARCHES_PER_DAY:-400}
     depends_on:
       migrate:
         condition: service_completed_successfully

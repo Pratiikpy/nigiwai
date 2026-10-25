@@ -351,3 +351,22 @@ test("account: an owner downloads a copy of the account's data, and a viewer is 
   expect((await sql<{ n: number }>("SELECT count(*)::int AS n FROM audit_log WHERE action = 'account.export' AND tenant_id = (SELECT id FROM tenant WHERE name = $1)", [name])).rows[0]?.n).toBeGreaterThanOrEqual(1);
   expect(problems.filter((p) => !deliberate.test(p) && !prefetch.test(p))).toEqual([]);
 });
+
+test("account: a long email address wraps inside the account card in the side menu instead of running out of it", async ({ page }, info) => {
+  const problems = watch(page);
+  const { email } = await signUp(page, "The Lantern Room");
+  const long = `a.very.long.address.for.the.owner.of.a.small.music.venue.${Date.now().toString(36)}@the-lantern-room-and-bar.example.com`;
+  await sql("UPDATE app_user SET email = $1 WHERE email = $2", [long, email]);
+  await page.goto("/app");
+  await openMenu(page);
+  const card = page.locator(".side__who");
+  await expect(card).toContainText(long);
+  const overflow = await card.evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    const widest = Math.max(...Array.from(el.querySelectorAll("*")).map((c) => c.getBoundingClientRect().right));
+    return widest - box.right;
+  });
+  expect(overflow).toBeLessThanOrEqual(1); // nothing inside the card reaches past its edge
+  await shot(page, info, "account-long-email");
+  expect(problems.filter((p) => !prefetch.test(p))).toEqual([]);
+});

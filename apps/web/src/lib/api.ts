@@ -92,7 +92,7 @@ export async function apiBlob(path: string, body: unknown): Promise<Blob> {
 }
 
 // ---- shapes (mirrors apps/api/src/nigiwai_api/schemas.py) -----------------------------------------------------
-export type PickerType = "artist" | "movie" | "tv_show" | "book" | "brand" | "podcast" | "videogame";
+export type PickerType = "artist" | "movie" | "tv_show" | "book" | "brand" | "place" | "podcast" | "videogame";
 
 export type Questions = {
   min_picks: number;

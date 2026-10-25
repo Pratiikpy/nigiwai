@@ -82,6 +82,43 @@ def place(
     }
 
 
+def search_place(
+    name: str,
+    entity_id: str | None = None,
+    *,
+    address: str | None = None,
+    lat: float = 51.5,
+    lon: float = -0.12,
+    kind: str = "Bar",
+    extra: list[tuple[str, str]] | None = None,
+) -> dict[str, Any]:
+    """A place as Qloo's /search returns one: located, with an address and a long list of tags, only some of which are taste.
+    `extra` adds (tag id, name) pairs, so a test can give a place a protected kind or a protected word."""
+    slug = kind.lower().replace(" ", "_")
+    tags = [
+        (f"urn:tag:category:place:{slug}", kind, "urn:tag:category:place"),
+        (f"urn:tag:genre:place:{slug}", kind, "urn:tag:genre:place"),
+        ("urn:tag:ambience:qloo:lively", "Lively", "urn:tag:ambience:qloo"),
+        ("urn:tag:decor:qloo:industrial", "Industrial", "urn:tag:decor:qloo"),
+        ("urn:tag:payments:place:visa", "Visa", "urn:tag:payments:place"),
+        (
+            "urn:tag:accessibility:place:ramp",
+            "Wheelchair accessible entrance",
+            "urn:tag:accessibility:place",
+        ),
+        ("urn:tag:customer_identity:qloo:students", "Students", "urn:tag:customer_identity:qloo"),
+    ] + [(tid, nm, ":".join(tid.split(":")[:4])) for tid, nm in extra or []]
+    return {
+        "name": name,
+        "entity_id": entity_id or new_id(),
+        "types": ["urn:entity:place"],
+        "popularity": 0.3,
+        "location": {"lat": lat, "lon": lon},
+        "tags": [{"tag_id": a, "name": b, "type": c} for a, b, c in tags],
+        "properties": {"address": address or f"{name}, Invented Street"},
+    }
+
+
 class FakeQloo:
     """Search matches by substring over a catalogue; insights (the eligibility probe) answers 200 or 400."""
 
@@ -128,7 +165,17 @@ class FakeQloo:
             wanted = set(p.get("types", "").split(","))
             hits = [
                 e for e in self.catalogue if q in e["name"].lower() and wanted & set(e["types"])
-            ][: int(p.get("take", "5"))]
+            ]
+            if "filter.location" in p:
+                # a point biases the search: the nearest first (and, as in Qloo, nothing but places comes back)
+                lat0, lon0 = (float(x) for x in p["filter.location"].split(","))
+                hits = [e for e in hits if "urn:entity:place" in e["types"]]
+                hits.sort(
+                    key=lambda e: (
+                        (e["location"]["lat"] - lat0) ** 2 + (e["location"]["lon"] - lon0) ** 2
+                    )
+                )
+            hits = hits[: int(p.get("take", "5"))]
             return RawResponse(status=200, body={"results": hits}, transport="rest")
         if path == "/v2/insights":
             seed = p.get("signal.interests.entities", "")

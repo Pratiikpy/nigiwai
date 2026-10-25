@@ -140,3 +140,24 @@ async def test_rest_reports_rate_limit_headers_to_the_ledger(rest) -> None:
     )
     remaining = rest._ledger.month_remaining_last  # recorded from X-Month-RateLimit-Remaining
     assert remaining is not None and remaining > 0
+
+
+@pytest.mark.asyncio
+async def test_a_place_search_near_a_point_finds_the_branch_near_it_and_stores_only_taste_tags(
+    rest,
+):
+    """Live, 2026-10-25: /search takes `filter.location` as "lat,lon", biases (not bounds) the results, and a long-tagged place keeps
+    only the namespaces the Guard allows, at most twenty."""
+    from qloo_guard.parse import MAX_PLACE_TAGS, PLACE_TASTE_NAMESPACES
+
+    near = GeoPoint(lat=40.7222, lon=-73.9871)
+    ctx = rest.new_context("picker")
+    res = await rest.search(
+        SearchRequest(query="blue bottle", types=(EntityType.PLACE,), take=8, near=near), ctx
+    )
+    assert res.ok and res.items
+    # an exact name near a point finds the branch near it: every result is a New York address
+    assert all("NY" in (e.address or "") for e in res.items[:3]), [e.address for e in res.items[:3]]
+    for e in res.items:
+        assert len(e.tags) <= MAX_PLACE_TAGS
+        assert {t.tag_id.split(":")[2] for t in e.tags} <= PLACE_TASTE_NAMESPACES

@@ -1,6 +1,6 @@
 """The Booking Brief as a one-page A4 PDF, drawn from the same document the page and the shared link use.
 
-Everything on the page is text from that document (item names and our own scores only), so the PDF cannot say anything the
+Everything on the page is text from that document (item names, up to three genre labels for each act and our own scores only), so the PDF cannot say anything the
 screen does not. Fonts are the poster's embedded Bricolage Grotesque and DM Mono (SIL OFL); a character they cannot draw is
 replaced with a question mark and the footer says so, rather than printing an empty box.
 """
@@ -177,9 +177,19 @@ def render(doc: dict[str, Any]) -> bytes:
         top = y - 3
         c.setFillColor(GROUP_COLOURS[i % 3])
         c.circle(cols[0] + 3, top - 7.5, 2.6, stroke=0, fill=1)
-        c.setFont(BODY, 9.5)
-        c.setFillColor(INK)
-        c.drawString(cols[0] + 11, top - 10, x.safe(g["label"])[:34])
+        # A group's name can be as long as three tags: it wraps inside its own column instead of running into the next one.
+        label_bottom = _wrapped(
+            x,
+            g["label"],
+            BODY,
+            9.5,
+            cols[0] + 11,
+            top,
+            cols[1] - cols[0] - 17,
+            10.5,
+            INK,
+            max_lines=2,
+        )
         count = f"{g['size']} of {basis['n']}" if basis["unit"] == "guests" else f"{g['size']} acts"
         c.setFont(BODY, 9.5)
         c.drawString(cols[1], top - 10, count)
@@ -187,7 +197,7 @@ def render(doc: dict[str, Any]) -> bytes:
         bottom = _wrapped(
             x, when, BODY, 8.5, cols[2], top - 1.5, M + CONTENT - cols[2], 10.5, INK_2, max_lines=2
         )
-        y = min(top - 17, bottom - 5)
+        y = min(top - 17, bottom - 5, label_bottom - 5)
         c.setStrokeColor(RULE)
         c.line(M, y, M + CONTENT, y)
     y -= 12
@@ -367,7 +377,9 @@ def _footer(x: _Ctx, doc: dict[str, Any], y_floor: float) -> None:
     extra = [n for n in doc["notes"][1:]]
     for n in extra[:2]:
         y = _wrapped(x, n, BODY, 7.4, M, y - 1, CONTENT, 9.2, INK_2, max_lines=2)
-    tail = "Taste data from Qloo. This brief holds item names and our own scores only."
+    tail = (
+        "Taste data from Qloo. This brief holds item names, genre labels and our own scores only."
+    )
     if x.unprintable:
         tail += " Some characters in names could not be printed here and show as ?; the online brief shows them."
     _wrapped(x, tail, BODY, 7.4, M, y - 1, CONTENT, 9.2, INK_2, max_lines=3)

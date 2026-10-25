@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from itertools import pairwise
 from typing import Any
 
 import psycopg
@@ -132,7 +133,7 @@ async def test_a_share_link_is_a_frozen_names_and_scores_only_copy_that_can_be_r
     own = (await owner.get(f"{base(owner, venue)}/brief")).json()
     assert [a["name"] for a in shared["acts"]] == [a["name"] for a in own["acts"]]
     blob = json.dumps(shared)
-    # item names and our own scores only: no entity ids, no popularity, no raw Qloo fields
+    # item names, genre labels and our own scores only: no entity ids, no popularity, no raw Qloo fields
     for forbidden in (
         "entity_id",
         "popularity",
@@ -223,3 +224,38 @@ def test_where_a_group_scans_is_put_in_words() -> None:
     tiny[2][12] = 3.0
     assert describe_when(tiny) is None  # under 10 scans is too few to describe
     assert describe_when([[1.0] * 3]) is None  # a malformed grid is ignored, not guessed at
+
+
+def overlapping_text(data: bytes) -> list[str]:
+    """Pairs of neighbouring characters on one line whose boxes overlap: text that runs into other text."""
+    page = pdfium.PdfDocument(data)[0].get_textpage()
+    chars = [(page.get_text_range(i, 1), page.get_charbox(i)) for i in range(page.count_chars())]
+    found = []
+    for (a, (al, ab, ar, at)), (b, (bl, bb, _br, bt)) in pairwise(chars):
+        same_line = min(at, bt) - max(ab, bb) > 0.5 * min(at - ab, bt - bb)
+        if a.strip() and b.strip() and same_line and bl < ar - 1.0 and bl > al:
+            found.append(f"{a}{b} at {bl:.0f},{bb:.0f}")
+    return found
+
+
+async def test_a_long_group_name_wraps_inside_its_column_and_never_runs_into_the_next(
+    world: World, admin: psycopg.Connection[Any]
+) -> None:
+    from nigiwai_api.services.brief_pdf import render
+
+    owner = await sign_up(world)
+    venue = await make_venue(owner)
+    await ready_brief(world, admin, owner, venue)
+    doc = (await owner.get(f"{base(owner, venue)}/brief")).json()
+    long = "Post Hardcore and Indie Rock acts"  # three tags long, as a real group of public lineups was named
+    doc["groups"][0]["label"] = long
+    data = render(doc)
+    pages, text = pdf_text(data)
+    assert pages == 1 and long in text  # the whole name is on the page
+    raw = pdfium.PdfDocument(data)[0].get_textpage().get_text_range()
+    assert f"{long}{doc['groups'][0]['size']}" not in raw.replace(
+        "\r\n", ""
+    )  # not run into the count beside it
+    assert overlapping_text(data) == []
+    # the same check passes on the plain brief, so it is not tripping on ordinary kerning
+    assert overlapping_text((await owner.get(f"{base(owner, venue)}/brief.pdf")).content) == []

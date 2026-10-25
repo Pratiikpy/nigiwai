@@ -1,4 +1,4 @@
-// The Booking Brief document (apps/api/src/nigiwai_api/services/brief.py): item names and our own scores only.
+// The Booking Brief document (apps/api/src/nigiwai_api/services/brief.py): item names, up to three genre labels for each act and our own scores only.
 
 export type BriefAct = {
   name: string;

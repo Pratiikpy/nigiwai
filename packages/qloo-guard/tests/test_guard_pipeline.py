@@ -571,3 +571,67 @@ async def test_budget_exhaustion_is_recorded_not_raised(make_rig: Any) -> None:
     for i in range(4):
         await rig.guard.search(search_req(f"q{i}"), ctx)
     assert [c.status for c in rig.recorder.for_trace(ctx.trace_id)][-1] == "budget_exhausted"
+
+
+async def test_a_place_search_near_a_point_sends_it_and_keeps_the_tags_of_what_comes_back(
+    make_rig: Any,
+) -> None:
+    here = {
+        **place_raw("Corner Tap", 100.0),
+        "location": {"lat": 40.7200, "lon": -73.9900},
+        "tags": [
+            {
+                "tag_id": "urn:tag:ambience:qloo:lively",
+                "name": "Lively",
+                "type": "urn:tag:ambience:qloo",
+            },
+            {
+                "tag_id": "urn:tag:payments:place:visa",
+                "name": "Visa",
+                "type": "urn:tag:payments:place",
+            },
+        ],
+    }
+    rig = make_rig(FakeTransport(respond=lambda p, q: ok(search_body(here))))
+    req = SearchRequest(
+        query="corner tap", types=(EntityType.PLACE,), near=GeoPoint(lat=40.72, lon=-73.99)
+    )
+    res = await rig.guard.search(req, rig.guard.new_context("picker"))
+    assert res.status == "ok" and [e.name for e in res.items] == ["Corner Tap"]
+    sent = dict(rig.transport.calls[0][1])
+    assert sent["filter.location"] == "40.7200,-73.9900" and sent["types"] == "urn:entity:place"
+    # the place is registered with its taste tags, which is what the groups are later built from; how to pay is not kept
+    entry = await rig.registry.get(here["entity_id"])
+    assert entry is not None and {t[0] for t in entry.tags} == {"urn:tag:ambience:qloo:lively"}
+    # asking again for the same point and name is served from the cache, with no second call
+    await rig.guard.search(req, rig.guard.new_context("picker"))
+    assert len(rig.transport.calls) == 1
+
+
+async def test_the_private_cache_never_holds_the_facilities_or_the_customers_qloo_lists_for_a_place(
+    make_rig: Any,
+) -> None:
+    raw = {
+        **place_raw("Corner Tap", 100.0),
+        "tags": [
+            {
+                "tag_id": "urn:tag:customer_identity:qloo:students",
+                "name": "Students",
+                "type": "urn:tag:customer_identity:qloo",
+            },
+            {
+                "tag_id": "urn:tag:ambience:qloo:lively",
+                "name": "Lively",
+                "type": "urn:tag:ambience:qloo",
+            },
+        ],
+    }
+    rig = make_rig(FakeTransport(respond=lambda p, q: ok(search_body(raw))))
+    req = SearchRequest(
+        query="corner tap", types=(EntityType.PLACE,), near=GeoPoint(lat=40.72, lon=-73.99)
+    )
+    await rig.guard.search(req, rig.guard.new_context("picker"))
+    stored = list(rig.store._items.values())
+    assert stored, "the answer was cached"
+    blob = repr([s.body for s in stored])
+    assert "Lively" in blob and "Students" not in blob and "customer_identity" not in blob

@@ -33,6 +33,16 @@ const NAV: { href: string; label: string; icon: IconName }[] = [
   { href: "/app/account", label: "Your login", icon: "lock" },
 ];
 
+/** An email address that may break after its "@" and its dots, so a long one wraps at a sensible place and not in the middle of a word. */
+function breakable(address: string) {
+  return address.split(/(?<=[@.])/).map((part, i) => (
+    <span key={`${i}-${part}`}>
+      {i > 0 ? <wbr /> : null}
+      {part}
+    </span>
+  ));
+}
+
 /** The side menu. Once the owner has a plan, the tools it leaves off are hidden here (their pages still open by address). */
 function Nav({ path, onNavigate }: { path: string; onNavigate: () => void }) {
   const { venue } = useVenue();
@@ -139,7 +149,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <strong>{state.tenant.name}</strong>
           )}
           <span className="meta">
-            {state.me.email} · {state.tenant.role}
+            {breakable(state.me.email)} · {state.tenant.role}
           </span>
         </div>
         <Nav path={path} onNavigate={() => setOpen(false)} />

@@ -8,6 +8,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from .config import TribesConfig
+from .places import is_place, keeps_for_taste
 from .types import Matrix, Pick, Respondent, TagRef
 
 
@@ -23,9 +24,17 @@ def keep_tag(tag_id: str, tag_type: str, cfg: TribesConfig) -> bool:
 
 
 def usable_tags(pick: Pick, cfg: TribesConfig) -> dict[str, tuple[str, str]]:
+    """The tags of a pick that may count as taste. A place is read through an allowlist (see `places`): its tags also carry facilities
+    and descriptions of other people, and some of those would read as a claim about a person's religion, health or orientation."""
+    place = is_place(pick.type)
     out: dict[str, tuple[str, str]] = {}
     for tag in pick.tags:
-        if tag.tag_id and tag.tag_id not in out and keep_tag(tag.tag_id, tag.type, cfg):
+        if not tag.tag_id or tag.tag_id in out:
+            continue
+        kept = (
+            keeps_for_taste(tag.tag_id, tag.name) if place else keep_tag(tag.tag_id, tag.type, cfg)
+        )
+        if kept:
             out[tag.tag_id] = (tag.name, tag.type)
     return out
 

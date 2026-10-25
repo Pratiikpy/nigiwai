@@ -161,7 +161,7 @@ export function SoundcheckWorkspace({ base, canWrite, demo = false }: { base: st
       ) : null}
       {basis.use === "guests" && basis.guests ? (
         <Notice tone="ok">
-          Checked against your <strong>{basis.guests.n} guests</strong> in {basis.guests.groups} groups
+          Checked against your <b>{basis.guests.n} guests</b> in {basis.guests.groups} groups
           {basis.guests.state === "provisional" ? " (provisional until 200 guests)" : ""}.
         </Notice>
       ) : null}

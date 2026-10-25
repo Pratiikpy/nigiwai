@@ -7,7 +7,7 @@ Status: work in progress. [docs/BUILD_STATE.md](docs/BUILD_STATE.md) says exactl
 ## What works today
 
 - **Try it without an account** (`/` and `/try`): three real venues (Mercury Lounge in New York, The Hideout and Empty Bottle in Chicago), each read from the public lineups of its past events and matched to Qloo. Anyone can open one, check any act against it, see the crowd map and download the Booking Brief. Scores there are provisional and say so; checking a new act calls Qloo, so each network and the whole site have daily limits. Any other music venue on MusicBrainz can be searched for on `/try` and asked for: it is built in the background from its public lineups (a few minutes, over a hundred Qloo calls, a handful of new venues a day for the whole site), opens by itself when ready, is kept for seven days and then deleted.
-- **Guest survey** (`/s/<token>`): consent notice, a type-ahead picker backed by a local index and live Qloo search, optional age band, area (tapped from a list the owner gives, or a short typed place name) and budget, a receipt code, and removal of your own answers.
+- **Guest survey** (`/s/<token>`): consent notice, a type-ahead picker backed by a local index and live Qloo search, optional age band, area (tapped from a list the owner gives, or a short typed place name) and budget, a receipt code, and removal of your own answers. A guest can also name favourite places: searched near the room, offered by name and address, and never a place that stands for a religion, a health service, an orientation, a political body or adult entertainment.
 - **Owner app** (`/app`): sign up, describe the venue, configure and publish a survey, create QR codes, download an A4 poster or A6 table card.
 - **Taste Card**: after sending, a guest gets a card from their own picks at once, and a few related tastes and places near the venue a moment later (at most three Qloo calls). Shareable as an image.
 - **My people** (`/app/people`): once 60 guests have answered, soft groups ("tribes") with their tags, most-picked items, weekday and hour rhythm, unusual pairings and a coarse age and gender lean from Qloo's audience data. Names unlock at 200 guests. A group is shown only if the crowd is more stable than two shuffled versions of itself; every figure carries a measured, observed or modelled label, and "How this was computed" is on the page.
@@ -29,6 +29,34 @@ Status: work in progress. [docs/BUILD_STATE.md](docs/BUILD_STATE.md) says exactl
 - **Drafts** (`/app/drafts`): from an action you accepted on Today, an enquiry to the act, an event page and a post; for any group, an ad angle with a headline and text inside the usual limits. They are filled from your own records only; every fact it cannot know is a [bracketed] gap you must fill before the draft can be approved. Approval is of the saved words, and editing takes it back. Nothing is sent: an approved enquiry can be opened in your own email program, and every step is in the audit log.
 - **Qloo Guard** (`packages/qloo-guard`): every Qloo call goes through typed requests, rule checks, a private cache, a rate limiter, a monthly budget and a trace.
 - **Privacy by construction**: no IP address, user agent or exact time is stored with an answer; every tenant table is protected by row-level security that the application role cannot bypass.
+
+## Sample Booking Briefs
+
+The deliverable, without running anything: the one-page brief an owner forwards to a booker, for each of the three demo venues. They are the real PDFs a visitor downloads from `/try`, saved by `just samples`. Each is **modelled from public lineups** (MusicBrainz), not from guests, holds item names, up to three genre labels for each act and our own scores, and says how every number was computed. Whether Qloo allows showing its output in this form publicly is not confirmed (docs/HUMAN.md, H8): remove `docs/samples` before any public push until it is.
+
+| Mercury Lounge, New York | The Hideout, Chicago | Empty Bottle, Chicago |
+|---|---|---|
+| [![Booking Brief for Mercury Lounge](docs/samples/booking-brief-mercury-lounge.png)](docs/samples/booking-brief-mercury-lounge.pdf) | [![Booking Brief for The Hideout](docs/samples/booking-brief-the-hideout.png)](docs/samples/booking-brief-the-hideout.pdf) | [![Booking Brief for Empty Bottle](docs/samples/booking-brief-empty-bottle.png)](docs/samples/booking-brief-empty-bottle.pdf) |
+
+## Screenshots
+
+A made-up room, made-up guests and made-up acts: no Qloo data and no real person's details are in these pictures (the sample briefs above are the one place the repository shows Qloo-derived names). Where a line on a screen speaks of Qloo, for example that a suggested act is "a real act in Qloo's graph", it describes what the product does with a real suggestion and is illustrative here, because these acts are invented. They are made by `NIGIWAI_SHOWCASE=1 npx playwright test e2e/showcase.spec.ts` (see Browser tests), from guests planted through the same database function the survey uses; the groups, the board, the map and the plan are then made by the product itself.
+
+| Today | My people |
+|---|---|
+| [![Today: the quietest hours, a Soundcheck, and the evidence behind each line](docs/screenshots/owner-today.png)](docs/screenshots/owner-today.png) | [![My people: named groups, what each over-indexes on, when they come](docs/screenshots/owner-my-people.png)](docs/screenshots/owner-my-people.png) |
+| **Crowd map** | **Booking Brief** |
+| [![Crowd map: the room on a real map, its guests as a ring of groups](docs/screenshots/owner-crowd-map.png)](docs/screenshots/owner-crowd-map.png) | [![Booking Brief: the page an owner forwards to a booker](docs/screenshots/owner-booking-brief.png)](docs/screenshots/owner-booking-brief.png) |
+| **Soundcheck** | **Sound plan** |
+| [![Soundcheck: suggested acts, each scored against the crowd](docs/screenshots/owner-soundcheck.png)](docs/screenshots/owner-soundcheck.png) | [![Sound plan: which acts to play at which time of the week](docs/screenshots/owner-sound-plan.png)](docs/screenshots/owner-sound-plan.png) |
+
+A guest, on a phone: scan, search, pick, and a Taste Card.
+
+<p>
+<img src="docs/screenshots/guest-1-welcome.png" alt="The consent page a guest sees first" width="19%"> <img src="docs/screenshots/guest-2-search.png" alt="Searching for something they love" width="19%"> <img src="docs/screenshots/guest-3-picked.png" alt="Three picks made" width="19%"> <img src="docs/screenshots/guest-4-about-you.png" alt="The optional questions" width="19%"> <img src="docs/screenshots/guest-5-taste-card.png" alt="The Taste Card" width="19%">
+</p>
+
+And the public pages: the front door, Try a venue (with the search for any venue), the evidence including where Qloo lost, the privacy page and the business case. [All screenshots](docs/screenshots).
 
 ## Run it locally
 
@@ -72,7 +100,7 @@ ANTHROPIC_API_KEY=sk-any-stand-in-value      # read by the API only to talk to t
 NIGIWAI_MIN_COMPLETION_SECONDS=0
 ```
 
-`reflow.spec.ts` opens every owner page at 320 pixels wide with real data on it and fails if the page gets a sideways scroll bar (WCAG 1.4.10). The judge-mode spec (`demo.spec.ts`) opens the real demo venues, so build them first with `just demo`. The `live.spec.ts` specs spend Qloo quota and run only with `NIGIWAI_E2E_LIVE=1` in the environment of the test command (its two model-led specs also need `NIGIWAI_E2E_LIVE_MODEL=1` and a real model configured on the API, because the stand-in model above would fail them) (the Python live tests, `just test-live`, use `NIGIWAI_RUN_LIVE=1`).
+`reflow.spec.ts` opens every owner page at 320 pixels wide with real data on it and fails if the page gets a sideways scroll bar (WCAG 1.4.10). The judge-mode spec (`demo.spec.ts`) opens the real demo venues, so build them first with `just demo`. `showcase.spec.ts` makes the README's screenshots from a made-up room and runs only with `NIGIWAI_SHOWCASE=1`, so a normal run never rewrites the images; `just samples` saves the sample briefs. The `live.spec.ts` specs spend Qloo quota and run only with `NIGIWAI_E2E_LIVE=1` in the environment of the test command (its two model-led specs also need `NIGIWAI_E2E_LIVE_MODEL=1` and a real model configured on the API, because the stand-in model above would fail them) (the Python live tests, `just test-live`, use `NIGIWAI_RUN_LIVE=1`).
 
 ## The language model
 
@@ -97,7 +125,9 @@ The product's own checks do not depend on the model: an item must have been retu
 | `apps/api` | FastAPI service: accounts, tenancy, picker, survey, posters, groups, card, lineups, Soundcheck, brief, map, background jobs |
 | `apps/web` | Next.js app: guest survey and owner screens |
 | `db` | Alembic migrations (plain SQL) |
-| `docs` | Decisions, build state, open questions |
+| `docs` | Decisions, build state, QA matrix, open questions, the submission write-up, sample briefs and screenshots |
+| `evals` | Measurements behind decisions (group stability against the research, what favourite places do to the groups) |
+| `tools` | Poster fonts, the design sync, and the sample-brief maker |
 
 ## Licence
 

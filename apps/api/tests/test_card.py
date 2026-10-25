@@ -284,3 +284,42 @@ async def test_results_for_a_seed_qloo_dropped_are_not_shown_as_matched_to_the_g
     receipt, _ = guest(admin, venue, picks)
     out = (await card(world, receipt, "/v1/public/card/extras")).json()
     assert out["status"] == "unavailable" and out["related"] == [] and out["near"] == []
+
+
+async def test_a_favourite_place_seeds_the_places_near_the_venue_and_is_never_a_seed_for_other_kinds(
+    world: World, admin: psycopg.Connection[Any]
+) -> None:
+    owner = await sign_up(world)
+    venue = await make_venue(owner)
+    place_kind = "urn:entity:place"
+    tap = known(admin, "Corner Tap", place_kind)
+    act = known(admin, "Folk Act")
+    film = known(admin, "Quiet Film", MOVIE)
+    receipt, _ = guest(admin, venue, [tap, act, film])  # the place is the guest's first pick
+    out = (await card(world, receipt, "/v1/public/card/extras")).json()
+    assert out["status"] == "ok" and out["calls"] <= 3
+    insights = [dict(p) for path, p in world.qloo.calls if path == "/v2/insights"]
+    # the place seeded the search for places near the venue ...
+    near = [p for p in insights if p.get("filter.type") == place_kind]
+    assert len(near) == 1 and near[0]["signal.interests.entities"] == tap
+    assert [p["name"] for p in out["near"]] == [
+        "Invented Bar 0",
+        "Invented Bar 1",
+        "Invented Bar 2",
+    ]
+    # ... and was never used as the seed for related acts, films or anything else
+    others = [p for p in insights if p.get("filter.type") != place_kind]
+    assert others and all(p.get("signal.interests.entities") != tap for p in others)
+    assert all(rel["because"] != "Corner Tap" for rel in out["related"])
+
+
+async def test_a_guest_who_picked_only_places_still_gets_the_instant_card_and_places_near_the_venue(
+    world: World, admin: psycopg.Connection[Any]
+) -> None:
+    owner = await sign_up(world)
+    venue = await make_venue(owner)
+    picks = [known(admin, f"Corner Tap {i}", "urn:entity:place") for i in range(3)]
+    receipt, _ = guest(admin, venue, picks)
+    assert (await card(world, receipt)).status_code == 200  # the instant card needs no Qloo
+    out = (await card(world, receipt, "/v1/public/card/extras")).json()
+    assert out["status"] == "ok" and out["related"] == [] and len(out["near"]) == 3

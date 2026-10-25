@@ -471,3 +471,50 @@ test("try any venue, live: a real venue with too few public events is told so, i
   expect(problems.filter((p) => !/_rsc=|ERR_ABORTED|status of 503/.test(p))).toEqual([]);
   await forgetRequested(LINCOLN_HALL);
 });
+
+test("favourite places, live: a guest names a real place near the room, picks it with an act and a brand, and gets a card", async ({ page, request }, info) => {
+  test.setTimeout(180_000);
+  await resetRateLimits();
+  const problems = watch(page);
+  const venue = await publishedVenue(request); // the room is in London
+  await page.goto(`/s/${venue.token}`);
+  await page.getByRole("button", { name: "Start" }).click();
+  const chips = page.getByRole("group", { name: "Search in" });
+  await chips.getByRole("button", { name: "Places" }).click();
+  await page.getByLabel("Search", { exact: true }).fill("dishoom");
+  const place = page.getByRole("button", { name: /^Add Dishoom/ }).first();
+  await expect(place).toBeVisible({ timeout: 30_000 });
+  // the address says where, so two branches can be told apart, and it is near the room
+  await expect(page.getByRole("listitem").filter({ hasText: /Dishoom/ }).first()).toContainText(/London/i);
+  await shot(page, info, "live-places-results");
+  await place.click();
+  await expect(page.getByRole("button", { name: /^Remove Dishoom/ }).first()).toBeVisible();
+  await chips.getByRole("button", { name: "All" }).click();
+  for (const [query, expected] of [
+    ["radiohead", /Radiohead/],
+    ["blue bottle", /Blue Bottle/],
+  ] as const) {
+    await page.getByLabel("Search", { exact: true }).fill(query);
+    const first = page.getByRole("button", { name: expected }).filter({ hasText: "Add" }).first();
+    await expect(first).toBeVisible({ timeout: 20_000 });
+    await first.click();
+  }
+  await expect(page.getByText("3 of 5 picked")).toBeVisible();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Send my picks" }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("still forming");
+  await expect(page.getByText("Finding related tastes…")).toBeHidden({ timeout: 40_000 });
+  await shot(page, info, "live-places-card");
+  // what was stored for the place: its id and type, and only taste tags (nothing about its customers, owners or diets)
+  const stored = await sql<{ entity_type: string; tags: [string, string, string][] }>(
+    "SELECT p.entity_type, e.tags FROM pick p JOIN response r ON r.id = p.response_id JOIN qloo_entity e ON e.entity_id = p.entity_id WHERE r.qr_point_id = $1 AND p.entity_type = 'urn:entity:place'",
+    [venue.qrId],
+  );
+  expect(stored.rows).toHaveLength(1);
+  const namespaces = new Set((stored.rows[0]?.tags ?? []).map((t) => t[0].split(":")[2]));
+  const taste = new Set(["genre", "category", "cuisine", "culinary_style", "menu_highlight", "beverage_offering", "specialty_dish", "ambience", "decor", "activity_type"]);
+  expect([...namespaces].filter((n) => !taste.has(n ?? ""))).toEqual([]);
+  expect(stored.rows[0]?.tags.length).toBeGreaterThan(0);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  expect(problems.filter((p) => !/_rsc=|ERR_ABORTED/.test(p))).toEqual([]);
+});

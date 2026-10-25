@@ -40,6 +40,7 @@ from .models import (
 )
 from .parse import (
     entities_from_body,
+    minimise_places,
     parse_compare,
     parse_demographics,
     parse_tags,
@@ -318,6 +319,7 @@ class QlooGuard:
                 cache_key=key,
             )
         self._breaker.success()
+        raw = dataclasses.replace(raw, body=minimise_places(raw.body))
         if raw.status in (200, 400, 404):
             ttl = ttl_for(path, params, probe=ctx.probe, place_listed=ctx.place_listed)
             await self._store.put(

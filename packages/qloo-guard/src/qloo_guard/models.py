@@ -40,13 +40,15 @@ class EntityType(StrEnum):
     )
 
 
-# Types a customer can pick in the survey (no person, no destination, no place: places are context, not taste).
+# Types a customer can pick in the survey (no person and no destination). A place is searched near the venue and on its own
+# (SearchRequest.near); the groups engine keeps only a place's taste tags, never its facilities.
 PICKER_TYPES: tuple[EntityType, ...] = (
     EntityType.ARTIST,
     EntityType.MOVIE,
     EntityType.TV_SHOW,
     EntityType.BOOK,
     EntityType.BRAND,
+    EntityType.PLACE,
     EntityType.PODCAST,
     EntityType.VIDEOGAME,
 )

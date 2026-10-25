@@ -61,3 +61,7 @@ e2e:
 
 # Everything the CI runs.
 check: lint typecheck test test-integration
+
+# Save a Booking Brief for each demo venue as a PDF and a PNG preview in docs/samples (needs `just dev-api` and `just demo`).
+samples:
+    uv run python tools/sample_briefs.py

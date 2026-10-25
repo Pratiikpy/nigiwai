@@ -1,7 +1,7 @@
 """The Booking Brief (PRD M22): one page an owner can forward to a booker or a partner.
 
 The document is built from what is already stored (the crowd's groups, the suggested acts and their Soundchecks), so it
-costs no Qloo call and can never disagree with the screens it summarises. It holds item names and our own scores only,
+costs no Qloo call and can never disagree with the screens it summarises. It holds item names, up to three genre labels for each act and our own scores only,
 never a raw Qloo response, and every figure carries its label. A crowd or a Soundcheck that is too thin says "not enough
 data yet" instead of showing a number. The page, the PDF and the shared link are all drawn from this one document.
 """

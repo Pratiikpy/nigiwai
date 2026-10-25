@@ -10,7 +10,12 @@ export const CATEGORIES: Record<PickerType, { label: string; kind: string; icon:
   book: { label: "Books", kind: "Book", icon: "book", cat: "books" },
   podcast: { label: "Podcasts", kind: "Podcast", icon: "mic", cat: "podcasts" },
   videogame: { label: "Games", kind: "Game", icon: "gamepad", cat: "games" },
+  place: { label: "Places", kind: "Place", icon: "pin", cat: "places" },
 };
+
+/** What the search box invites, by the category chosen. A place is looked for near the venue the guest is in, on its own. */
+export const SEARCH_PLACEHOLDER = "Band, show, film, book or brand";
+export const PLACE_PLACEHOLDER = "A cafe, bar or restaurant near here";
 
 /** Up to two capital letters for a tile: "The Lantern Hollow" -> "LH". */
 export function initials(name: string): string {

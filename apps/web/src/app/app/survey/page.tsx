@@ -15,7 +15,7 @@ const DEFAULTS: Questions = {
   ask_district: true,
   districts: [],
   ask_budget: true,
-  picker_types: ["artist", "tv_show", "movie", "brand", "podcast", "videogame", "book"],
+  picker_types: ["artist", "tv_show", "movie", "brand", "podcast", "videogame", "book", "place"],
 };
 
 export default function SurveyPage() {

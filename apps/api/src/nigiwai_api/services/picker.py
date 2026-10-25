@@ -12,11 +12,13 @@ from dataclasses import dataclass
 from typing import Literal
 from uuid import UUID, uuid4
 
+from nigiwai_tribes import sensitive_place
 from qloo_guard import (
     PICKER_TYPES,
     CallContext,
     Entity,
     EntityType,
+    GeoPoint,
     QlooGuard,
     SearchRequest,
 )
@@ -27,6 +29,7 @@ from ..schemas import PickerItem, PickerOut
 
 LOCAL_ENOUGH = 6  # matches from the local index that make a live search unnecessary
 RESULT_LIMIT = 8
+PLACE_FETCH = 16  # places are asked for twice over: some are dropped as duplicates and some as places nobody is offered
 MIN_CHARS = 2
 MAX_CHARS = 80
 ALLOWED = {t.value for t in PICKER_TYPES}
@@ -37,6 +40,7 @@ TYPE_URN = {
     "tv_show": EntityType.TV_SHOW,
     "book": EntityType.BOOK,
     "brand": EntityType.BRAND,
+    "place": EntityType.PLACE,
     "podcast": EntityType.PODCAST,
     "videogame": EntityType.VIDEOGAME,
 }
@@ -59,6 +63,11 @@ def _short_type(urn: str) -> str:
     return urn.rsplit(":", 1)[-1]
 
 
+NO_PLACE = (
+    "No place by that name near here. Try another spelling, or choose something else you love."
+)
+
+
 @dataclass(frozen=True)
 class Selection:
     entity_id: str
@@ -73,7 +82,13 @@ class PickerService:
 
     # ------------------------------------------------------------------------------------------ search
     async def search(
-        self, query: str, types: list[str], *, tenant_id: UUID | None, allow_live: bool
+        self,
+        query: str,
+        types: list[str],
+        *,
+        tenant_id: UUID | None,
+        allow_live: bool,
+        near: GeoPoint | None = None,
     ) -> PickerOut:
         q = normalise(query)
         if len(q) < MIN_CHARS:
@@ -81,6 +96,12 @@ class PickerService:
         urns = [TYPE_URN[t].value for t in types if t in TYPE_URN]
         if not urns:
             return PickerOut(items=[], source="none", message="Nothing to search for.")
+        if "place" in types:
+            if types != ["place"]:  # Qloo drops every other type from a search that has a point
+                return PickerOut(
+                    items=[], source="none", message="Places are searched for on their own."
+                )
+            return await self._search_places(q, tenant_id, allow_live, near)
         items = await self._local(q, urns)
         source: Literal["local", "qloo", "cache", "none"] = "local"
         message: str | None = None
@@ -96,6 +117,55 @@ class PickerService:
         if not items and message is None:
             message = "No match yet. Try another spelling, or choose something else you love."
         return PickerOut(items=items, source=source if items else "none", message=message)
+
+    async def _search_places(
+        self, q: str, tenant_id: UUID | None, allow_live: bool, near: GeoPoint | None
+    ) -> PickerOut:
+        """A favourite place, searched near the venue the guest is in. Never from the saved index, which is shared by every venue and
+        would offer a place from another city; always a live search (the Guard caches it by name and point), and a place that is a
+        proxy for something this product never collects is never offered."""
+        if near is None:
+            return PickerOut(
+                items=[],
+                source="none",
+                message="This venue has no position on the map, so places cannot be searched near it.",
+            )
+        if self._guard is None or not allow_live:
+            return PickerOut(
+                items=[],
+                source="none",
+                message="Place search is not available right now. Please try again in a moment."
+                if allow_live
+                else "That is a lot of searching for one visit. Please pick from what you have found.",
+            )
+        request = SearchRequest(query=q, types=(EntityType.PLACE,), take=PLACE_FETCH, near=near)
+        ctx = CallContext(trace_id=uuid4(), purpose="picker", tenant_id=tenant_id)
+        result = await self._guard.search(request, ctx)
+        if not result.ok:
+            if result.status == "empty":
+                return PickerOut(items=[], source="none", message=NO_PLACE)
+            return PickerOut(
+                items=[],
+                source="none",
+                message="Live search is unavailable right now. Please try again in a moment.",
+            )
+        items = [
+            PickerItem(
+                entity_id=e.entity_id,
+                name=e.name,
+                type="place",
+                description=(e.address or "")[:140] or None,
+            )
+            for e in result.items
+            if e.primary_type == EntityType.PLACE.value
+            and sensitive_place(e.name, [(t.tag_id, t.name) for t in e.tags]) is None
+        ][:RESULT_LIMIT]
+        if not items:
+            return PickerOut(items=[], source="none", message=NO_PLACE)
+        source: Literal["local", "qloo", "cache", "none"] = (
+            "cache" if result.cache in ("hit", "stale", "replay") else "qloo"
+        )
+        return PickerOut(items=items, source=source, message=None)
 
     async def _local(self, q: str, urns: list[str]) -> list[PickerItem]:
         like = _like_escape(q.lower())
@@ -208,6 +278,10 @@ class PickerService:
         entry = await self._guard.registry.get(entity_id)
         if entry is None or not entry.types or entry.types[0] not in ALLOWED:
             return None
+        if entry.types[0] == EntityType.PLACE.value and sensitive_place(
+            entry.name or "", [(t[0], t[1]) for t in entry.tags]
+        ):
+            return Selection(entity_id, False, "place")
         if entry.eligible is not None:
             return Selection(entity_id, entry.eligible, _short_type(entry.types[0]))
         entity = Entity(entity_id=entity_id, name=entry.name or entity_id, types=entry.types)
@@ -238,12 +312,23 @@ class PickerService:
             rows = (
                 await conn.execute(
                     text(
-                        "SELECT entity_id, type, insights_eligible FROM qloo_entity WHERE entity_id = ANY(:ids)"
+                        "SELECT entity_id, type, insights_eligible, tags, name_nfc FROM qloo_entity WHERE entity_id = ANY(:ids)"
                     ),
                     {"ids": entity_ids},
                 )
             ).all()
-        found = {r.entity_id: (r.type, r.insights_eligible) for r in rows}
+        # A place that is a proxy for something never collected (a place of worship, a clinic) is refused here as well as never being
+        # offered, so a hand-built request cannot store one. It reads as a pick that cannot be used.
+        found = {
+            r.entity_id: (
+                r.type,
+                False
+                if r.type == EntityType.PLACE.value
+                and sensitive_place(r.name_nfc, [(t[0], t[1]) for t in (r.tags or [])]) is not None
+                else r.insights_eligible,
+            )
+            for r in rows
+        }
         if set(found) != set(entity_ids) or any(t not in ALLOWED for t, _ in found.values()):
             return None
         return found

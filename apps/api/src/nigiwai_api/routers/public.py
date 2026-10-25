@@ -11,6 +11,7 @@ import time
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
+from qloo_guard import GeoPoint
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
@@ -112,22 +113,36 @@ async def get_survey(token: str, request: Request, state: State) -> PublicSurvey
 
 
 # ---- picker ---------------------------------------------------------------------------------------------------
+async def _venue_point(state: AppState, resolved: Resolved) -> GeoPoint | None:
+    """The venue's position, for the one thing a guest's browser never sees it for: biasing a search for a favourite place."""
+    async with state.engine.begin() as conn:
+        row = (
+            await conn.execute(
+                text("SELECT * FROM public_survey_point(:l)"), {"l": resolved.row.location_id}
+            )
+        ).first()
+    return GeoPoint(lat=row.lat, lon=row.lon) if row is not None else None
+
+
 @router.post("/picker")
 async def picker(body: PickerIn, request: Request, state: State) -> PickerOut:
     await limit(state, request, [("pub-pick", 120, 60.0)])
     resolved = await resolve(state, body.token)
     nonce_id, _ = await verify_nonce(state, resolved, body.nonce)
     allowed_types = resolved.questions.picker_types
-    types = [body.type] if body.type else list(allowed_types)
+    # "All" means every kind but places: a place is searched near the venue and on its own (Qloo drops the other types from a search
+    # that has a point), so it is its own category.
+    types = [body.type] if body.type else [t for t in allowed_types if t != "place"]
     if any(t not in allowed_types for t in types):
         raise HTTPException(status_code=422, detail="That kind of pick is not part of this survey.")
+    near = await _venue_point(state, resolved) if types == ["place"] else None
     # Live Qloo searches are capped per sitting; saved matches are not.
     used = await state.redis.incr(f"picker:{nonce_id}")
     if used == 1:
         await state.redis.expire(f"picker:{nonce_id}", state.settings.nonce_ttl_seconds)
     allow_live = used <= state.settings.picker_calls_per_session
     result: PickerOut = await state.picker.search(
-        body.q, types, tenant_id=resolved.tenant_id, allow_live=allow_live
+        body.q, types, tenant_id=resolved.tenant_id, allow_live=allow_live, near=near
     )
     return result
 

@@ -226,7 +226,7 @@ class QrPointOut(Strict):
     url: str | None = None
 
 
-PickerType = Literal["artist", "movie", "tv_show", "book", "brand", "podcast", "videogame"]
+PickerType = Literal["artist", "movie", "tv_show", "book", "brand", "place", "podcast", "videogame"]
 ALL_PICKER_TYPES: tuple[PickerType, ...] = (
     "artist",
     "movie",
@@ -235,6 +235,7 @@ ALL_PICKER_TYPES: tuple[PickerType, ...] = (
     "podcast",
     "videogame",
     "book",
+    "place",
 )
 
 

@@ -92,7 +92,7 @@ export const TRIBE_COLOURS = ["var(--t1)", "var(--t2)", "var(--t3)", "var(--tu)"
 export function typeWord(type: string): string {
   const key = type.split(":").pop() ?? type;
   return (
-    { artist: "Music", movie: "Film", tv_show: "Show", brand: "Brand", book: "Book", podcast: "Podcast", videogame: "Game" }[key] ??
+    { artist: "Music", movie: "Film", tv_show: "Show", brand: "Brand", book: "Book", place: "Place", podcast: "Podcast", videogame: "Game" }[key] ??
     key
   );
 }

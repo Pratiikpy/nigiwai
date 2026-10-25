@@ -21,6 +21,7 @@ from .models import (
     AreaRef,
     EntityType,
     FrozenModel,
+    GeoPoint,
     TagRef,
     is_forbidden_type,
     is_qloo_id,
@@ -144,6 +145,10 @@ class SearchRequest(FrozenModel):
     types: tuple[EntityType, ...] = Field(min_length=1, max_length=8)
     take: int = Field(default=5, ge=1, le=100)
     page: int = Field(default=1, ge=1, le=PAGE_MAX)
+    # Places only. Qloo treats the point as a bias, not a bound: `filter.location.radius` changes nothing on /search (probed live,
+    # 2026-10-25: the same 20 results from a radius of 300 m to 50 km), but an exact name near the point finds the branch near it.
+    # A mixed-type search with a point drops every non-place type (QLOO_TESTS.md 5.4), so a point is refused for any other type.
+    near: GeoPoint | None = None
 
     @field_validator("query")
     @classmethod
@@ -162,6 +167,12 @@ class SearchRequest(FrozenModel):
             raise ValueError("duplicate types")
         return v
 
+    @model_validator(mode="after")
+    def _a_point_is_for_places_alone(self) -> SearchRequest:
+        if self.near is not None and self.types != (EntityType.PLACE,):
+            raise ValueError("a location can only be given to a search for places and nothing else")
+        return self
+
     def endpoint(self) -> tuple[str, Params]:
         params: Params = [
             ("query", self.query),
@@ -170,6 +181,9 @@ class SearchRequest(FrozenModel):
         ]
         if self.page != 1:
             params.append(("page", str(self.page)))
+        if self.near is not None:
+            # /search wants "lat,lon" (insights wants WKT, longitude first). Rounded to about 11 m, so one venue is one cache key.
+            params.append(("filter.location", f"{self.near.lat:.4f},{self.near.lon:.4f}"))
         return "/search", params
 
 

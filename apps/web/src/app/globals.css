@@ -1,6 +1,7 @@
 /* Product styles on top of the design system (src/design, copied verbatim by tools/sync_design.py). Direction A only. */
 
 /* Colour groups for the pick types the prototype did not draw. */
+.tile::before { content: attr(data-initials); }
 .tile[data-cat="books"] { --tile-bg: var(--t3-soft); --tile-fg: var(--t3); }
 .tile[data-cat="podcasts"] { --tile-bg: var(--t1-soft); --tile-fg: var(--t1); }
 .tile[data-cat="games"] { --tile-bg: var(--t2-soft); --tile-fg: var(--t2); }
@@ -42,7 +43,7 @@
 .nav a[aria-current="page"] { background: var(--surface-inv); color: var(--ink-inv); }
 .nav a .ic { flex: none; }
 .side__who { display: grid; gap: 2px; font-size: var(--t-sm); padding: var(--s-3); background: var(--surface); border-radius: var(--card-r); border: 2px solid var(--rule-strong); }
-.side__who strong { overflow-wrap: anywhere; }
+.side__who strong, .side__who .meta { overflow-wrap: anywhere; min-width: 0; } /* a long address wraps inside its card instead of running out of it */
 .side__foot { margin-top: auto; display: grid; gap: var(--s-2); }
 @media (max-width: 860px) {
   .shell { grid-template-columns: minmax(0, 1fr); }

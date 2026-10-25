@@ -217,3 +217,48 @@ def test_cache_key_ignores_parameter_order(perm: list[tuple[str, str]]) -> None:
     base = cache_key("https://h", "/x", [("a", "1"), ("b", "2"), ("c", "3")])
     assert cache_key("https://h", "/x", list(perm)) == base
     assert cache_key("https://other", "/x", list(perm)) != base
+
+
+def test_a_search_for_places_can_be_biased_to_a_point_written_latitude_first() -> None:
+    """/search takes "lat,lon" (insights takes WKT, longitude first): a swapped pair would bias the search to the wrong ocean."""
+    r = SearchRequest(
+        query="corner tap",
+        types=(EntityType.PLACE,),
+        near=GeoPoint(lat=40.72224, lon=-73.98716),
+        take=8,
+    )
+    path, params = r.endpoint()
+    assert path == "/search"
+    assert dict(params) == {
+        "query": "corner tap",
+        "types": "urn:entity:place",
+        "take": "8",
+        "filter.location": "40.7222,-73.9872",  # rounded to four places: one venue, one cache key
+    }
+
+
+@pytest.mark.parametrize(
+    "types",
+    [
+        (EntityType.ARTIST,),
+        (EntityType.PLACE, EntityType.ARTIST),
+        (EntityType.BRAND, EntityType.PLACE),
+    ],
+)
+def test_a_point_is_refused_for_anything_but_a_search_for_places_alone(
+    types: tuple[EntityType, ...],
+) -> None:
+    """Qloo drops every non-place type from a search that has a point, so the request refuses to be built."""
+    with pytest.raises(ValidationError, match="only be given to a search for places"):
+        SearchRequest(query="x", types=types, near=GeoPoint(lat=1, lon=2))
+
+
+def test_a_search_without_a_point_sends_no_location() -> None:
+    params = SearchRequest(query="x", types=(EntityType.PLACE,)).endpoint()[1]
+    assert all(k != "filter.location" for k, _ in params)
+
+
+@pytest.mark.parametrize(("lat", "lon"), [(91, 0), (-91, 0), (0, 181), (0, -181)])
+def test_a_point_outside_the_globe_cannot_be_built(lat: float, lon: float) -> None:
+    with pytest.raises(ValidationError):
+        GeoPoint(lat=lat, lon=lon)

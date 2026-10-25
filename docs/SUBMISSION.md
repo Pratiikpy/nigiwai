@@ -1,6 +1,6 @@
 # Nigiwai for the Qloo LLM Hackathon
 
-This page answers the six points of the submission guide. The product is live-demoable without an account at `/` and `/try`; it is not described here from screenshots, because a screenshot of Soundcheck shows Qloo-derived names and scores and nothing in this repository republishes Qloo response data.
+This page answers the six points of the submission guide. The product is live-demoable without an account at `/` and `/try`, and the repository shows it three ways without running anything: screenshots of the owner and guest screens made from a made-up room (no Qloo data in them, [docs/screenshots](screenshots)), three sample Booking Briefs for the demo venues ([docs/samples](samples), which carry Qloo-derived act names and genre labels, so they are subject to the open question in the last section), and the text below.
 
 ## 1. The problem
 
@@ -21,6 +21,8 @@ Every Qloo call goes through one guarded path (`packages/qloo-guard`): typed req
 | Qloo against an AI alone | `/v2/insights` neighbours of the act, `/search` exact name for every act the model names | Shows which acts exist and where the two lists agree, without ranking either side |
 | Who a group is | `/v2/insights`, `filter.type=urn:demographics` | Coarse age and gender lean, labelled Modelled |
 | What is around | `/v2/insights`, place type, a location and radius, a category tag | Places inside an exact radius |
+| A guest names a favourite place | `/search`, place type, `filter.location` (the room's own position, `lat,lon`) | The point biases the search toward the branch near the room (probed live: it is a bias, not a bound, and the radius parameter changes nothing). A place carries up to 200 tags, so only what a place is, serves and feels like is read or stored; its customers', owners' and diets' tags never are (docs/DECISIONS.md D41) |
+| Build any music venue a visitor asks for | `/search` for each past performer, then the Soundcheck calls above | The same code that builds the three demo venues, queued to the worker, capped per network and per day, deleted after seven days (D40) |
 
 Qloo is the reason the score exists: the fit of an act to a group is Qloo's affinity, ranked among reference acts Qloo returned in the same call, so it cannot come from a model's memory. An LLM can name acts similar to a famous one; it cannot say how a particular crowd's favourites relate to an obscure act it has never seen. Section 6 says what this does and does not establish.
 
@@ -48,7 +50,7 @@ Entity and tag choices: seeds are artists only; an artist is used as a seed only
 
 ## 4. Seeing it
 
-Open the front page, choose a venue, pick a suggested act or search any artist, and open "The Qloo calls behind this score". There are no screenshots in the repository by design. The three demo venues are Mercury Lounge (New York), The Hideout and Empty Bottle (Chicago).
+Open the front page, choose a venue, pick a suggested act or search any artist, and open "The Qloo calls behind this score". The three demo venues are Mercury Lounge (New York), The Hideout and Empty Bottle (Chicago); `/try` also builds any other music venue you search for, from its public lineups, in a few minutes. Without running anything: the README shows the sample Booking Briefs, and [docs/screenshots](screenshots) shows a made-up room's Today board, groups, crowd map, Sound plan and brief, the guest survey and the Taste Card on a phone, and the public pages. Every screenshot there is made by `e2e/showcase.spec.ts` from invented guests and acts, with no Qloo data and no real person's details.
 
 ## 5. Running it from a clean environment
 
@@ -71,6 +73,6 @@ just dev-api       # second terminal: just dev-web
 - **Groups need guests.** Named groups unlock at 200 guests, a provisional view at 60, because the research measured stability on public data, not on guests answering a QR survey. Usefulness of the groups to owners is untested.
 - **The AI-alone panel needs a model key.** Without one it says so. It has run on a real model (NVIDIA's hosted Nemotron, three acts out of three) but not on Claude, whose key needs a workspace id that has not been supplied.
 - **Rebuilding a demo venue twice gave different suggestions** from the same matched acts; the cause is unknown.
-- **Qloo's terms** on showing Qloo-derived scores, names and neighbours to the public, and on share links, have not been confirmed with Qloo. Item names and our own scores are shown; raw Qloo responses and descriptive fields are not republished in the repository or in shared links.
-- **Built beyond Soundcheck, with the same honesty rules:** a Today board (quiet hours and two actions from the owner's own scans), Ask Nigiwai (answers whose items must have been returned by a Qloo call), an onboarding interview that saves nothing until the owner confirms, a Sound plan by time of the week, Grow (ghost customers and the places around, each behind a check it prints), Moves (before and after with a range, often "inconclusive") and Drafts (text with gaps the owner must fill, nothing sent). The model-led parts (Ask, the interview, the AI-alone panel) have been run on a real model and real Qloo, in the API and in a browser, but not on Claude (docs/DECISIONS.md D27).
+- **Qloo's terms** on showing Qloo-derived scores, names and neighbours to the public, and on share links, have not been confirmed with Qloo. Item names, up to three genre labels for each act and our own scores are shown; raw Qloo responses and descriptive fields are not republished in the repository or in shared links.
+- **Built beyond Soundcheck, with the same honesty rules:** favourite places in the survey (searched near the room, never a place that stands for a religion, a health service, an orientation, a political body or adult entertainment; the filter is judged from real searches and is **NOT VERIFIED** as complete, D41), a copy of an account's data an owner can download, Gaps and Moves layers on the crowd map, a Today board (quiet hours and up to three actions from the owner's own scans), Ask Nigiwai (answers whose items must have been returned by a Qloo call), an onboarding interview that saves nothing until the owner confirms, a Sound plan by time of the week, Grow (ghost customers and the places around, each behind a check it prints), Moves (before and after with a range, often "inconclusive") and Drafts (text with gaps the owner must fill, nothing sent). The model-led parts (Ask, the interview, the AI-alone panel) have been run on a real model and real Qloo, in the API and in a browser, but not on Claude (docs/DECISIONS.md D27).
 - **Not built:** the Don't-do list, a public City Taste Atlas (the opt-in groundwork is built and shows nothing until neighbouring venues join), sending anything from Drafts and ad-platform connectors. [docs/BUILD_STATE.md](BUILD_STATE.md) lists what is built, how it was tested and what is open; [docs/HUMAN.md](HUMAN.md) lists what needs a person.
