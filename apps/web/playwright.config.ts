@@ -24,7 +24,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: "uv run uvicorn nigiwai_api.app:create_app --factory --host 127.0.0.1 --port 8000",
+      command: "uv run uvicorn nigiwai_api.app:create_app --factory --host 127.0.0.1 --port 8000 --timeout-keep-alive 65",
       cwd: "../..",
       url: "http://127.0.0.1:8000/readyz",
       reuseExistingServer: true,

@@ -26,7 +26,7 @@ demo *venue:
 
 # Run the API on :8000 (set NIGIWAI_QLOO_KEY_FILE or QLOO_API_KEY to enable live Qloo search).
 dev-api:
-    uv run uvicorn nigiwai_api.app:create_app --factory --reload --host 127.0.0.1 --port 8000
+    uv run uvicorn nigiwai_api.app:create_app --factory --reload --host 127.0.0.1 --port 8000 --timeout-keep-alive 65
 
 # Run the web app on :3000, proxying /api/v1 to the API.
 dev-web:
