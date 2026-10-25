@@ -363,3 +363,26 @@ def test_the_openai_provider_needs_a_key_and_a_base_url(
         and from_file._headers["authorization"] == "Bearer nvapi-file"
     )
     assert isinstance(build_llm(str(env), "m"), LlmClient)
+
+
+def test_empty_settings_are_the_same_as_unset_ones(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The production Compose file passes every optional model setting through, empty when the operator left it out."""
+    from nigiwai_api.settings import Settings
+
+    for name in (
+        "NIGIWAI_LLM_PROVIDER",
+        "NIGIWAI_LLM_BASE_URL",
+        "NIGIWAI_LLM_MODEL",
+        "NIGIWAI_LLM_EXTRA_BODY",
+        "NIGIWAI_ANTHROPIC_WORKSPACE_ID",
+        "NIGIWAI_ANTHROPIC_KEY_FILE",
+    ):
+        monkeypatch.setenv(name, "")
+    s = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert (s.llm_provider, s.llm_base_url, s.llm_model) == ("anthropic", None, "claude-sonnet-5-5")
+    assert (s.llm_extra_body, s.anthropic_workspace_id, s.anthropic_key_file) == (None, None, None)
+    # and a real value still wins
+    monkeypatch.setenv("NIGIWAI_LLM_PROVIDER", "openai")
+    monkeypatch.setenv("NIGIWAI_LLM_BASE_URL", "https://gateway.example/v1")
+    s2 = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert (s2.llm_provider, s2.llm_base_url) == ("openai", "https://gateway.example/v1")

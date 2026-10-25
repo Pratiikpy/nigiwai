@@ -14,7 +14,10 @@ DEV_SECRET = "dev-only-secret-change-me-in-real-environments"  # noqa: S105 - re
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="NIGIWAI_", env_file=".env", extra="ignore")
+    # An empty value is the same as an unset one: the production Compose file passes optional settings through as empty strings.
+    model_config = SettingsConfigDict(
+        env_prefix="NIGIWAI_", env_file=".env", extra="ignore", env_ignore_empty=True
+    )
 
     env: Literal["development", "test", "production"] = "development"
 
