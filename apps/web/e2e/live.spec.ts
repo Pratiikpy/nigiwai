@@ -398,3 +398,76 @@ test("ask with a real model and real Qloo: a culture question is answered with i
   expect(kind).toBe("model"); // written by the model, not the plain fallback
   expect(problems.filter((p) => !/_rsc=|ERR_ABORTED/.test(p))).toEqual([]);
 });
+
+// A real venue that is not one of the three prepared ones, asked for by a stranger: looked up on the real MusicBrainz, built in the
+// background by the worker from its real lineups and the real Qloo (about a hundred calls), then opened like any demo venue.
+const BOWERY = "67c8865a-cf04-43a5-afbc-512434d07353"; // 34 past events with lineups on MusicBrainz when this was written
+const LINCOLN_HALL = "e5a03ff2-f038-479a-8ab9-ba6e9539744a"; // 6: too few to build from
+
+async function forgetRequested(mbid: string) {
+  await sql("DELETE FROM business WHERE id IN (SELECT business_id FROM demo_venue WHERE requested AND place_mbid = $1)", [mbid]);
+}
+
+test("try any venue, live: a stranger asks for a real venue, it is built from real lineups and Qloo, and opens", async ({ page }, info) => {
+  test.setTimeout(900_000);
+  await resetRateLimits();
+  await forgetRequested(BOWERY);
+  const problems = watch(page);
+  await page.goto("/try");
+  const card = page.getByTestId("find-venue");
+  await card.getByLabel("Venue name").fill("Bowery Ballroom");
+  await card.getByRole("button", { name: "Search", exact: true }).click();
+  const hit = page.getByTestId("found-place").filter({ hasText: "Manhattan" }).first();
+  await expect(hit).toBeVisible({ timeout: 60_000 });
+  await expect(hit.getByRole("button", { name: "Build this venue" })).toBeVisible();
+  await shot(page, info, "live-find-venue");
+  await hit.getByRole("button", { name: "Build this venue" }).click();
+  await expect(page).toHaveURL(/\/try\/req-bowery-ballroom-[0-9a-f]{6}$/);
+  await expect(page.getByTestId("venue-building")).toBeVisible();
+  await shot(page, info, "live-venue-building");
+
+  // the worker builds it; the page opens by itself when it is ready
+  await expect(page.getByTestId("venue-building")).toHaveCount(0, { timeout: 840_000 });
+  await expect(page.getByRole("heading", { name: "Bowery Ballroom", level: 1 })).toBeVisible();
+  await expect(page.getByText("Venue you asked for")).toBeVisible();
+  const chips = page.getByRole("group", { name: "Suggested acts" }).getByRole("button");
+  await expect(chips.first()).toBeVisible({ timeout: 30_000 });
+  expect(await chips.count()).toBeGreaterThanOrEqual(3);
+  await chips.first().click();
+  const verdict = page.getByTestId("verdict");
+  await expect(verdict).toBeVisible();
+  await expect(verdict).toHaveAttribute("data-status", "ok");
+  expect(Number(await page.getByTestId("score").first().innerText())).toBeGreaterThan(0);
+  await shot(page, info, "live-requested-venue");
+  expect((await new AxeBuilder({ page }).exclude(".maplibregl-canvas").analyze()).violations).toEqual([]);
+  // asking for it again finds what exists instead of building it twice
+  await page.goto("/try");
+  await page.getByTestId("find-venue").getByLabel("Venue name").fill("Bowery Ballroom");
+  await page.getByTestId("find-venue").getByRole("button", { name: "Search", exact: true }).click();
+  await expect(page.getByTestId("found-place").filter({ hasText: "Manhattan" }).first()).toContainText("Already built.", { timeout: 60_000 });
+  expect(problems.filter((p) => !/_rsc=|ERR_ABORTED|status of 503/.test(p))).toEqual([]);
+  await forgetRequested(BOWERY);
+});
+
+test("try any venue, live: a real venue with too few public events is told so, in plain words", async ({ page }, info) => {
+  test.setTimeout(420_000);
+  await resetRateLimits();
+  await forgetRequested(LINCOLN_HALL);
+  const problems = watch(page);
+  await page.goto("/try");
+  const card = page.getByTestId("find-venue");
+  await card.getByLabel("Venue name").fill("Lincoln Hall");
+  await card.getByRole("button", { name: "Search", exact: true }).click();
+  const hit = page.getByTestId("found-place").filter({ hasText: "Chicago" }).first();
+  await expect(hit).toBeVisible({ timeout: 60_000 });
+  await hit.getByRole("button", { name: "Build this venue" }).click();
+  await expect(page).toHaveURL(/\/try\/req-lincoln-hall-[0-9a-f]{6}$/);
+  const failed = page.getByTestId("venue-failed");
+  await expect(failed).toBeVisible({ timeout: 360_000 });
+  await expect(failed).toContainText("Not enough public data");
+  await expect(failed).not.toContainText("DemoError");
+  await shot(page, info, "live-venue-too-thin");
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  expect(problems.filter((p) => !/_rsc=|ERR_ABORTED|status of 503/.test(p))).toEqual([]);
+  await forgetRequested(LINCOLN_HALL);
+});

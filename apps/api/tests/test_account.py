@@ -33,6 +33,13 @@ async def code_of(world: World, email: str) -> tuple[Owner, str]:
     return Owner(client, r.json()), r.json()["recovery_code"]
 
 
+async def member_of_account(world: World, owner: Owner, role: str, email: str) -> Owner:
+    made = (await owner.post("/team/invitations", json={"role": role})).json()
+    client, r = await signup_raw(world, email, invite_token=made["token"], business_name=None)
+    assert r.status_code == 201, r.text
+    return Owner(client, r.json())
+
+
 async def recover(world: World, email: str, code: str, password: str = NEW) -> Any:
     return await world.client().post(
         "/v1/auth/recover", json={"email": email, "recovery_code": code, "new_password": password}
@@ -690,3 +697,158 @@ async def test_the_cap_on_owned_accounts_holds_when_the_hourly_limit_does_not_ap
         "/v1/invitations/accept", headers=owner.headers, json={"token": made["token"]}
     )
     assert joined.status_code == 200
+
+
+# ---- a copy of the account's data ---------------------------------------------------------------------------------
+def _unzip(content: bytes) -> dict[str, bytes]:
+    import io
+    import zipfile
+
+    with zipfile.ZipFile(io.BytesIO(content)) as z:
+        assert z.testzip() is None
+        return {n: z.read(n) for n in z.namelist()}
+
+
+async def test_an_owner_downloads_a_copy_that_holds_their_data_and_nothing_that_signs_anyone_in(
+    world: World, admin: psycopg.Connection[Any]
+) -> None:
+    import json
+
+    owner, code = await code_of(world, "own@example.com")
+    other, _ = await code_of(world, "other@example.com")
+    venue = await make_venue(
+        owner, reward={"title": "A free coffee", "detail": "Show this at the bar"}
+    )
+    await make_venue(other)  # another account's data must stay out
+    made = (await owner.post("/team/invitations", json={"role": "viewer"})).json()
+    r = await owner.client.get(f"/v1/tenants/{owner.tenant_id}/export")
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "application/zip"
+    assert re.fullmatch(
+        r'attachment; filename="nigiwai-export-\d{8}-\d{4}\.zip"', r.headers["content-disposition"]
+    )
+    assert r.headers["cache-control"] == "private, no-store"
+    files = _unzip(r.content)
+    assert set(files) == {
+        "README.txt",
+        "account.json",
+        "venue.json",
+        "guests.json",
+        "groups.json",
+        "scores.json",
+        "decisions.json",
+        "questions.json",
+        "audit_log.csv",
+    }
+    account = json.loads(files["account.json"])
+    assert account["account"]["name"] == "Acc" and [m["email"] for m in account["members"]] == [
+        "own@example.com"
+    ]
+    assert [i["role"] for i in account["invitations"]] == ["viewer"]
+    vj = json.loads(files["venue.json"])
+    assert [b["name"] for b in vj["businesses"]] == ["The Lantern"] and len(vj["posters"]) == 1
+    assert vj["survey_versions"][0]["reward"]["title"] == "A free coffee"
+    assert vj["places"][0]["lat"] == 51.5 and vj["places"][0]["lon"] == -0.12
+    # nothing in the copy can be used to sign in, to get in, or to remove a guest's answer
+    everything = b"\n".join(files.values()).decode("utf-8")
+    for secret in (
+        code,
+        code.replace("-", ""),
+        made["token"],
+        venue.token,
+        PASSWORD,
+        "$argon2",
+        "password_hash",
+        "recovery_hash",
+        "token_hash",
+        "token_enc",
+        "delete_token",
+        "csrf",
+    ):
+        assert secret not in everything, secret
+    stored = admin.execute(
+        "SELECT encode(recovery_hash, 'hex'), password_hash FROM app_user WHERE email = 'own@example.com'"
+    ).fetchone()
+    assert stored is not None and all(s not in everything for s in stored)
+    # the other account's name and data are not in it, and the export is written to the audit log
+    assert "other@example.com" not in everything
+    assert admin.execute(
+        "SELECT count(*) FROM audit_log WHERE tenant_id = %s AND action = 'account.export'",
+        (owner.tenant_id,),
+    ).fetchone() == (1,)
+    assert (
+        "audit_log.csv" in files and b"account.export" not in files["audit_log.csv"]
+    )  # the entry is made after the copy is built
+
+
+async def test_the_copy_counts_guests_but_never_shows_one(
+    world: World, admin: psycopg.Connection[Any]
+) -> None:
+    import json
+
+    owner, _ = await code_of(world, "own@example.com")
+    venue = await make_venue(owner)
+    common, rare = entity(admin, "Sample Act Common"), entity(admin, "Sample Act Rare")
+    for i in range(13):
+        answer(
+            admin, venue, [(common, ARTIST)] + ([(rare, ARTIST)] if i < 9 else [])
+        )  # the rare act is picked by 9 guests
+    admin.execute(
+        "UPDATE response SET age_band = '25-34', district = 'Eastside' WHERE tenant_id = %s",
+        (owner.tenant_id,),
+    )
+    admin.execute(
+        "UPDATE response SET age_band = '18-24', district = 'Old Town' WHERE id IN (SELECT id FROM response WHERE tenant_id = %s ORDER BY id LIMIT 2)",
+        (owner.tenant_id,),
+    )
+    # one answer is held for review (sent too fast): it is counted as held and is in no figure
+    admin.execute(
+        "UPDATE response SET quality_flag = 'quarantined' WHERE id = (SELECT id FROM response WHERE tenant_id = %s AND district = 'Eastside' ORDER BY id LIMIT 1)",
+        (owner.tenant_id,),
+    )
+    r = await owner.client.get(f"/v1/tenants/{owner.tenant_id}/export")
+    files = _unzip(r.content)
+    g = json.loads(files["guests.json"])["businesses"][0]
+    assert (g["counted"], g["held_for_review"]) == (12, 1)
+    # 9 guests is below the minimum of ten: the rare act is not listed, the common one is
+    assert [(i["name"], i["guests"]) for i in g["items_at_least_minimum_guests"]] == [
+        ("Sample Act Common", 12)
+    ]
+    # a value fewer than ten guests gave is not there at all, so it cannot be told apart from "nobody"
+    assert g["answers_at_least_minimum_guests"]["district"] == {"Eastside": 10}
+    assert g["answers_at_least_minimum_guests"]["age_band"] == {"25-34": 10}
+    assert "Old Town" not in files["guests.json"].decode("utf-8") and "18-24" not in files[
+        "guests.json"
+    ].decode("utf-8")
+    # no row is one guest: no response id, no pick row, no receipt
+    blob = b"\n".join(files.values()).decode("utf-8")
+    ids = [str(x[0]) for x in admin.execute("SELECT id FROM response").fetchall()]
+    assert not any(i in blob for i in ids)
+    assert "position" not in blob and "response_id" not in blob
+
+
+async def test_only_an_owner_can_download_a_copy_and_it_is_limited(world: World) -> None:
+    owner, _ = await code_of(world, "own@example.com")
+    manager = await member_of_account(world, owner, "manager", "m@example.com")
+    viewer = await member_of_account(world, owner, "viewer", "v@example.com")
+    url = f"/v1/tenants/{owner.tenant_id}/export"
+    assert (await world.client().get(url)).status_code == 401
+    for who in (manager, viewer):
+        assert (await who.client.get(url)).status_code == 403
+    outsider, _ = await code_of(world, "out@example.com")
+    assert (await outsider.client.get(url)).status_code in (403, 404)
+    codes = [(await owner.client.get(url)).status_code for _ in range(6)]
+    assert codes == [200] * 5 + [429]
+
+
+async def test_an_account_with_nothing_in_it_still_has_a_copy(world: World) -> None:
+    owner, _ = await code_of(world, "own@example.com")
+    r = await owner.client.get(f"/v1/tenants/{owner.tenant_id}/export")
+    assert r.status_code == 200
+    import json
+
+    files = _unzip(r.content)
+    assert (
+        json.loads(files["guests.json"])["businesses"] == []
+        and json.loads(files["venue.json"])["businesses"] == []
+    )

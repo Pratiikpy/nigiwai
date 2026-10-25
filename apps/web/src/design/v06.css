@@ -26,6 +26,9 @@
 .vcard dl { display: grid; grid-template-columns: auto 1fr; gap: 2px var(--s-3); font-size: var(--t-sm); }
 .vcard dt { color: var(--ink-3); }
 .vcard dd { margin: 0; font-variant-numeric: tabular-nums; }
+/* A name field with its button beside it, wrapping under it only when the line is too narrow. */
+.findrow { display: flex; gap: var(--s-2); flex-wrap: wrap; align-items: stretch; }
+.findrow .input { flex: 1 1 16rem; width: auto; min-width: 0; }
 .searchrow { display: flex; gap: var(--s-2); flex-wrap: wrap; align-items: stretch; }
 .searchrow .search { flex: 1 1 280px; }
 .facts { display: grid; gap: var(--s-4); grid-template-columns: repeat(3, minmax(0, 1fr)); }

@@ -9,6 +9,7 @@ as a move. Too little data produces "not enough data yet" and what would unlock 
 
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID
@@ -18,10 +19,12 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from ..db import transaction
+from . import grow as grow_service
 from . import hours as hrs
 from . import soundcheck, tribes
 
 HOURS_PICTURE_FROM = 10  # scans before the hours picture is drawn at all
+MAX_ACTIONS = 3  # a few things a week, each with its reason and its evidence
 SPARSE_BELOW = 10  # a stretch with fewer scans than this cannot say who comes
 PROVISIONAL_GROUPS_FROM = 60
 NAMED_GROUPS_FROM = 200
@@ -227,6 +230,65 @@ def _idea_action(window: hrs.Window, total: int, group: dict[str, Any]) -> dict[
     }
 
 
+def _ghost_action(doc: dict[str, Any]) -> dict[str, Any] | None:
+    """Someone the crowd is missing, from the last Grow run, only while it was made for the groups as they are now and only when its own
+    checks allowed ghost customers to be shown at all. A hypothesis to try and log; Moves can then check it against the scans."""
+    run = doc.get("run") if doc.get("state") == "ready" else None
+    ghosts = run.get("ghosts") if isinstance(run, dict) else None
+    items = (
+        ghosts.get("items") if isinstance(ghosts, dict) and ghosts.get("status") == "ok" else None
+    )
+    if not items or not isinstance(run, dict):
+        return None
+    g = items[0]
+    label = next(
+        (x["label"] for x in run.get("groups", []) if x["index"] == g["group_index"]),
+        "one of your groups",
+    )
+    names = [a["name"] for a in g.get("acts", [])[:3]]
+    if not names:
+        return None
+    when = (doc.get("updated_at") or "")[:10]
+    carrying = g.get("carrying")
+    unit = g.get("unit", "guests")
+    minimum = (
+        int((ghosts.get("limit") or {}).get("min_group", 10)) if isinstance(ghosts, dict) else 10
+    )
+    return {
+        "key": f"ghost:{g['group_index']}:{hashlib.sha256(str(g['tag_id']).encode()).hexdigest()[:12]}",  # the key is hex: a tag id is not
+        "kind": "Reach people you are missing",
+        "icon": "people",
+        "title": f"Try {g['tag']} for people like {label}",
+        "why": (
+            f"Qloo lists {g['tag']} acts next to what {label} picks, and few of your {unit} carry that taste. "
+            f"{_list_of(names)} could be a reason for people like {label} who are not coming yet to come."
+        ),
+        "evidence": [
+            _evidence(
+                "observed",
+                f"Qloo links {_list_of(names)} to what {label} picks, and to {g['tag']}.",
+                f"From Grow, looked up {when}." if when else None,
+            ),
+            _evidence(
+                "measured",
+                f"Fewer than {minimum} of your {unit} carry {g['tag']}."
+                if carrying is None
+                else f"{carrying} of your {unit} carry {g['tag']}.",
+                "Grow shows this only when your groups' neighbouring acts really differed, and it printed the checks.",
+            ),
+            _evidence(
+                "modelled",
+                f"That {g['tag']} would bring in people like {label} is a hypothesis, not a forecast.",
+                "Log it as a move and Nigiwai compares scans before and after.",
+            ),
+        ],
+        "fit": None,
+        "prov": [f"Grow run of {when}" if when else "Grow run", "Qloo's neighbouring acts"],
+        "act": None,
+        "slot": None,
+    }
+
+
 def _book_slot(
     busy: list[hrs.Window], in_hours: int, nights: list[int], lineup_weekday: list[float] | None
 ) -> dict[str, Any] | None:
@@ -414,6 +476,11 @@ async def build(
             actions.append(idea)
         else:
             actions.insert(0, idea)
+
+    if len(actions) < MAX_ACTIONS:
+        ghost = _ghost_action(await grow_service.get(engine, tenant_id, business_id))
+        if ghost is not None:
+            actions.append(ghost)
 
     hold: dict[str, Any] | None = None
     if sparse:

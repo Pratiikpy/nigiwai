@@ -122,6 +122,22 @@ function Recovery({ doc, onMade }: { doc: AccountDoc; onMade: () => void }) {
   );
 }
 
+/** A copy of an account's data as a ZIP. A plain link: the browser sends the session cookie and saves the file the server names. */
+function ExportAccount({ row }: { row: AccountRow }) {
+  return (
+    <div className="stack stack--sm" data-testid="export-account">
+      <a className="btn btn--sm" href={`/api/v1/tenants/${row.id}/export`} download data-testid="export-link">
+        <Icon name="download" size="sm" />
+        Download a copy of the data (.zip)
+      </a>
+      <p className="meta">
+        Your venue, survey, posters, groups, scores, drafts, moves and the record of changes. No passwords or secrets, and no guest on their own: guests are counted, and an item
+        appears only when at least ten gave it.
+      </p>
+    </div>
+  );
+}
+
 function DeleteAccount({ row, onDeleted }: { row: AccountRow; onDeleted: () => Promise<void> }) {
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -295,7 +311,12 @@ export function AccountWorkspace() {
                 <strong>{a.name}</strong>
                 <span className="meta">{ROLE_NAME[a.role]}</span>
               </div>
-              {a.role === "owner" ? <DeleteAccount row={a} onDeleted={afterAccountDeleted} /> : null}
+              {a.role === "owner" ? (
+                <>
+                  <ExportAccount row={a} />
+                  <DeleteAccount row={a} onDeleted={afterAccountDeleted} />
+                </>
+              ) : null}
             </li>
           ))}
         </ul>

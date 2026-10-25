@@ -12,6 +12,7 @@ import psycopg
 import pytest
 from harness import World, make_venue, sign_up
 from nigiwai_api.services.geocode import Geocoder, normalise_district
+from test_brief import ready_brief
 from test_soundcheck import base, crowd
 
 
@@ -310,3 +311,59 @@ def test_district_names_are_counted_without_case_accents_or_spacing() -> None:
     assert normalise_district("  Hackney ") == normalise_district("HACKNEY") == "hackney"
     assert normalise_district("Saint-Denis") == normalise_district("saint  denis") == "saint denis"
     assert normalise_district("Zürich") == "zurich"
+
+
+async def test_the_map_carries_a_gap_candidate_and_the_moves_only_when_they_are_real(
+    world: World, admin: psycopg.Connection[Any]
+) -> None:
+    """Gaps come from the last Grow run, only while it belongs to the groups as they are, and only for groups the run itself found
+    without a place of their own. Moves are the owner's own flags. Nothing is asked of Qloo to draw either."""
+    from test_today import plant_ghost_run
+
+    owner = await sign_up(world)
+    venue = await make_venue(owner)
+    await ready_brief(world, admin, owner, venue)
+    root = f"/v1/tenants/{owner.tenant_id}/businesses/{venue.business_id}"
+    doc = (await owner.client.get(f"{root}/map")).json()
+    assert doc["gaps"] is None and doc["moves"] == []
+    made = await owner.client.post(
+        f"{root}/moves",
+        headers=owner.headers,
+        json={"kind": "act", "title": "Booked a band", "started_on": "2026-10-02"},
+    )
+    assert made.status_code == 201, made.text
+    doc = (await owner.client.get(f"{root}/map")).json()
+    assert [(m["title"], m["started_on"], m["ended_on"]) for m in doc["moves"]] == [
+        ("Booked a band", "2026-10-02", None)
+    ]
+    # a run whose places were told apart, with one group that has none of its own
+    await plant_ghost_run(world, admin, owner, venue)
+    run = admin.execute("SELECT result FROM grow_run").fetchone()[0]  # type: ignore[index]
+    run["places"] = {
+        "status": "ok",
+        "category": "bar",
+        "radius_m": 900,
+        "wide_radius_m": 4000,
+        "nearby": {
+            "told_apart": True,
+            "by_group": [],
+            "gaps": [{"group_index": 1, "group": "Group B"}],
+        },
+        "elsewhere": {},
+        "dropped_closed": 0,
+        "closure_unanswered": False,
+    }
+    admin.execute("UPDATE grow_run SET result = %s::jsonb", (json.dumps(run),))
+    calls_before = len(world.qloo.calls)
+    doc = (await owner.client.get(f"{root}/map")).json()
+    assert doc["gaps"]["groups"] == [{"index": 1, "label": "Group B"}]
+    assert doc["gaps"]["radius_m"] == 900 and doc["gaps"]["category"] == "bar"
+    assert (doc["gaps"]["lat"], doc["gaps"]["lon"]) == (51.5, -0.12)
+    assert len(world.qloo.calls) == calls_before  # drawn from stored rows
+    # a run made for older groups, a run that never told the groups apart, or one with no gap: no gap is drawn
+    admin.execute("UPDATE grow_run SET basis_ref = 'older'")
+    assert (await owner.client.get(f"{root}/map")).json()["gaps"] is None
+    admin.execute("UPDATE grow_run SET basis_ref = %s", (run["basis"]["ref"],))
+    run["places"]["nearby"]["gaps"] = []
+    admin.execute("UPDATE grow_run SET result = %s::jsonb", (json.dumps(run),))
+    assert (await owner.client.get(f"{root}/map")).json()["gaps"] is None

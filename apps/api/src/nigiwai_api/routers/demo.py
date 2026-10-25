@@ -22,7 +22,7 @@ from ..services import brief as brief_service
 from ..services import compare as compare_service
 from ..services import demo as demo_service
 from ..services import grow as grow_service
-from ..services import mapdata
+from ..services import lineup, mapdata
 from ..services import sound as sound_service
 from ..services import soundcheck as service
 from ..services.brief_pdf import render
@@ -39,8 +39,21 @@ READ = ("demo-read", 240, 600.0)
 RUN = ("demo-run", 8, 600.0)
 SEARCH = ("demo-search", 40, 60.0)
 COMPARE = ("demo-compare", 8, 600.0)
+# Looking a venue up costs one polite MusicBrainz request; asking for one to be built costs over a hundred Qloo calls.
+FIND = ("demo-find", 20, 60.0)
+ASK = ("demo-ask", 10, 3600.0)
 DAY = 86400.0
 BUSY = "The demo is busy. Please try again in a little while."
+
+
+MusicBrainzId = Annotated[
+    str,
+    StringConstraints(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"),
+]
+
+
+class AskIn(Strict):
+    mbid: MusicBrainzId
 
 
 class SoundcheckIn(Strict):
@@ -93,6 +106,8 @@ def _public(v: dict[str, Any]) -> dict[str, Any]:
         "blurb": v["blurb"],
         "summary": v["summary"],
         "refreshed_at": v["refreshed_at"],
+        "requested": v["requested"],
+        "expires_at": v["expires_at"],
     }
 
 
@@ -100,6 +115,89 @@ def _public(v: dict[str, Any]) -> dict[str, Any]:
 async def venues(request: Request, state: State) -> list[dict[str, Any]]:
     await limit(state, request, [READ])
     return await demo_service.listing(state.engine)
+
+
+def _musicbrainz(state: Any) -> lineup.MusicBrainz:
+    if state.musicbrainz is None:
+        raise HTTPException(status_code=503, detail="Venue search is not available on this server.")
+    mb: lineup.MusicBrainz = state.musicbrainz
+    return mb
+
+
+@router.get("/find")
+async def find(
+    request: Request, state: State, q: str = Query(min_length=3, max_length=80)
+) -> dict[str, Any]:
+    """Venues on MusicBrainz that match a name, each marked with the demo venue already built for it, if there is one."""
+    await limit(state, request, [FIND])
+    mb = _musicbrainz(state)
+    await _site_cap(state, "demo-find", state.settings.demo_place_searches_per_day)
+    try:
+        hits = await mb.search_places(q, limit=8)
+    except lineup.LineupError as exc:
+        raise HTTPException(
+            status_code=503, detail="Venue search is not answering right now. Please try again."
+        ) from exc
+    known = await demo_service.places_known(state.engine, [h.mbid for h in hits])
+    return {
+        "places": [
+            {
+                "mbid": h.mbid,
+                "name": h.name,
+                "area": h.area,
+                "address": h.address,
+                "kind": h.kind,
+                "mappable": h.lat is not None and h.lon is not None,
+                "slug": (known.get(h.mbid) or {}).get("slug"),
+                "status": (known.get(h.mbid) or {}).get("status"),
+            }
+            for h in hits
+        ]
+    }
+
+
+@router.post("/request")
+async def ask(body: AskIn, request: Request, state: State) -> dict[str, str]:
+    """A visitor asks for a venue to be built from its public lineups. The build takes minutes and runs in the worker; a venue
+    that exists, or is already being built, is returned as it is."""
+    await limit(state, request, [ASK])
+    _guard(state)
+    mb = _musicbrainz(state)
+    try:
+        place = await mb.lookup_place(body.mbid)
+    except lineup.LineupError as exc:
+        raise HTTPException(
+            status_code=503, detail="Venue search is not answering right now. Please try again."
+        ) from exc
+    if place is None:
+        raise HTTPException(status_code=404, detail="MusicBrainz has no such place.")
+
+    async def admit() -> None:
+        await _site_cap(state, "demo-request", state.settings.demo_requests_per_day)
+
+    try:
+        return await demo_service.request_venue(state.engine, place, admit)
+    except demo_service.RequestRefused as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+
+
+@router.get("/request/{slug}")
+async def request_status(slug: Slug, request: Request, state: State) -> dict[str, Any]:
+    """Where a requested venue's build stands. Only venues a visitor asked for are reported here."""
+    await limit(state, request, [READ])
+    found = await demo_service.venue(state.engine, slug)
+    if found is None or not found["requested"]:
+        raise HTTPException(status_code=404, detail="not found")
+    out: dict[str, Any] = {
+        "slug": found["slug"],
+        "name": found["name"],
+        "mbid": found["place_mbid"],
+        "status": found["status"],
+    }
+    if found["status"] == "failed":
+        out["reason"] = demo_service.reason_for(found["error"])
+        out["retry_at"] = found["retry_at"]
+    return out
 
 
 @router.get("/{slug}")

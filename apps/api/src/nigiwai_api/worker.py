@@ -92,7 +92,11 @@ async def finish(engine: AsyncEngine, job_id: int, error: str | None, attempts: 
 
 
 async def run_job(
-    engine: AsyncEngine, guard: QlooGuard | None, job: Any, mb: lineup.MusicBrainz | None
+    engine: AsyncEngine,
+    guard: QlooGuard | None,
+    job: Any,
+    mb: lineup.MusicBrainz | None,
+    demo: DemoRefresh | None = None,
 ) -> None:
     if job.kind == "recompute_tribes":
         force = bool((job.payload or {}).get("force"))
@@ -130,19 +134,30 @@ async def run_job(
     elif job.kind == "grow":
         await grow.run_job(engine, guard, UUID(str(job.tenant_id)), UUID(str(job.business_id)))
         log.info("grow %s", job.business_id)
+    elif job.kind == "demo_build":
+        if mb is None:
+            raise RuntimeError("no MusicBrainz client configured")
+        extra = demo or DemoRefresh(None, None, 0)
+        verdict = await demo_service.build_requested(
+            engine, guard, mb, extra.llm, extra.limiter, extra.daily_limit, dict(job.payload)
+        )
+        log.info("demo_build %s: %s", (job.payload or {}).get("slug"), verdict)
     else:
         raise ValueError(f"unknown job kind {job.kind!r}")
 
 
 async def work_once(
-    engine: AsyncEngine, guard: QlooGuard | None, mb: lineup.MusicBrainz | None = None
+    engine: AsyncEngine,
+    guard: QlooGuard | None,
+    mb: lineup.MusicBrainz | None = None,
+    demo: DemoRefresh | None = None,
 ) -> bool:
     """Claim and run one job. True when there was one (so the caller loops again without sleeping)."""
     job = await claim(engine)
     if job is None:
         return False
     try:
-        await run_job(engine, guard, job, mb)
+        await run_job(engine, guard, job, mb, demo)
     except Exception as exc:
         log.exception("job %s failed", job.id)
         await finish(engine, job.id, f"{type(exc).__name__}: {exc}", job.attempts)
@@ -173,6 +188,9 @@ async def refresh_demo(
     """Rebuild the demo venues that are a week old, one at a time, since each takes minutes. A venue whose rebuild fails
     keeps its old results and stays visible; the error is stored on it and the next look is hours away."""
     rebuilt: list[str] = []
+    expired = await demo_service.expire_requested(engine)
+    if expired:
+        log.info("%s requested demo venues expired", expired)
     for slug in await demo_service.due_for_rebuild(engine):
         spec = next((s for s in demo_service.SPECS if s.slug == slug), None)
         if spec is None:
@@ -215,7 +233,7 @@ async def run_forever(
             if demo is not None and mb is not None and loop.time() - last_demo > DEMO_EVERY:
                 last_demo = loop.time()
                 await refresh_demo(engine, guard, mb, demo)
-            if await work_once(engine, guard, mb):
+            if await work_once(engine, guard, mb, demo):
                 continue
         except Exception:
             log.exception("worker loop error")

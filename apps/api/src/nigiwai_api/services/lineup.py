@@ -95,6 +95,52 @@ class EventLineup:
     performers: list[Performer]
 
 
+def _without_nul(value: Any) -> Any:
+    """A NUL character cannot be stored in the cache's JSON column, and a hand-edited public record may hold one."""
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if isinstance(value, list):
+        return [_without_nul(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _without_nul(v) for k, v in value.items()}
+    return value
+
+
+def _tidy(value: Any, limit: int) -> str | None:
+    """Text from a hand-edited public database, made safe to store and show: printable characters only (a NUL cannot be stored at
+    all), whitespace collapsed to single spaces, and no longer than a name or an address ever needs to be."""
+    if not isinstance(value, str):
+        return None
+    cleaned = " ".join("".join(ch for ch in value if ch.isprintable() or ch.isspace()).split())
+    return cleaned[:limit] or None
+
+
+def _place_hit(p: dict[str, Any]) -> PlaceHit | None:
+    name = _tidy(p.get("name"), 100)
+    if not p.get("id") or not name:
+        return None
+    area = _tidy((p.get("area") or {}).get("name"), 100)
+    coordinates = p.get("coordinates") or {}
+    lat: float | None
+    lon: float | None
+    try:
+        lat, lon = float(coordinates["latitude"]), float(coordinates["longitude"])
+    except (KeyError, TypeError, ValueError):
+        lat = lon = None
+    # MusicBrainz is hand-edited: it holds places with a longitude of -457. Out of range is no position at all.
+    if lat is not None and lon is not None and not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        lat = lon = None
+    return PlaceHit(
+        p["id"],
+        name,
+        area,
+        _tidy(p.get("address"), 200),
+        _tidy(p.get("disambiguation") or p.get("type"), 60),
+        lat,
+        lon,
+    )
+
+
 class MusicBrainz:
     """The slice of the MusicBrainz web service this needs, polite by construction: one request per 1.1 s across the
     process, an identifying User-Agent (their rule), results cached for a week."""
@@ -148,7 +194,7 @@ class MusicBrainz:
                     last_error = exc
                     resp = None
             if resp is not None and resp.status_code == 200:
-                body = resp.json()
+                body = _without_nul(resp.json())
                 async with self._engine.begin() as conn:
                     await conn.execute(
                         text(
@@ -166,37 +212,17 @@ class MusicBrainz:
     async def search_places(self, query: str, limit: int = 8) -> list[PlaceHit]:
         quoted = '"' + query.replace('"', " ").strip() + '"'
         body = await self._get("/place", {"query": quoted, "limit": str(limit)})
-        out: list[PlaceHit] = []
-        for p in body.get("places", []):
-            if not p.get("id") or not p.get("name"):
-                continue
-            area = (p.get("area") or {}).get("name")
-            coordinates = p.get("coordinates") or {}
-            lat: float | None
-            lon: float | None
-            try:
-                lat, lon = float(coordinates["latitude"]), float(coordinates["longitude"])
-            except (KeyError, TypeError, ValueError):
-                lat = lon = None
-            # MusicBrainz is hand-edited: it holds places with a longitude of -457. Out of range is no position at all.
-            if (
-                lat is not None
-                and lon is not None
-                and not (-90 <= lat <= 90 and -180 <= lon <= 180)
-            ):
-                lat = lon = None
-            out.append(
-                PlaceHit(
-                    p["id"],
-                    p["name"],
-                    area,
-                    p.get("address"),
-                    p.get("disambiguation") or p.get("type"),
-                    lat,
-                    lon,
-                )
-            )
-        return out
+        return [hit for p in body.get("places", []) if (hit := _place_hit(p)) is not None]
+
+    async def lookup_place(self, mbid: str) -> PlaceHit | None:
+        """One place by its MusicBrainz id, or None when MusicBrainz has no such place."""
+        try:
+            body = await self._get(f"/place/{mbid}", {})
+        except LineupError as exc:
+            if "answered 404" in str(exc):
+                return None
+            raise
+        return _place_hit(body)
 
     async def events(self, place_mbid: str) -> list[EventLineup]:
         out: list[EventLineup] = []

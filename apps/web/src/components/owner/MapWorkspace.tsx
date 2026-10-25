@@ -36,7 +36,7 @@ function useTheme(): "light" | "dark" {
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 const sel = (s: Selection) => (s ? `${s.kind}:${s.id}` : "");
 const parseSel = (v: string | null): Selection => {
-  const m = /^(location|cell|place):(.+)$/.exec(v ?? "");
+  const m = /^(location|cell|place|gap|move):(.+)$/.exec(v ?? "");
   return m ? ({ kind: m[1], id: m[2] } as Selection) : null;
 };
 
@@ -60,6 +60,8 @@ function Inspector({ data, around, selection, demo }: { data: CrowdMapData; arou
   const location = selection?.kind === "location" ? data.locations.find((l) => l.id === selection.id) : undefined;
   const cell = selection?.kind === "cell" ? data.catchment.find((c) => c.cell === selection.id) : undefined;
   const placeHit = selection?.kind === "place" ? around?.places.find((p) => p.entity_id === selection.id) : undefined;
+  const gap = selection?.kind === "gap" ? data.gaps : null;
+  const move = selection?.kind === "move" ? data.moves.find((x) => x.id === selection.id) : undefined;
   return (
     <aside className="card mapx__side" aria-label="Inspector" data-testid="inspector">
       <div className="tabs" role="tablist" aria-label="Inspector">
@@ -75,7 +77,9 @@ function Inspector({ data, around, selection, demo }: { data: CrowdMapData; arou
           {location ? <LocationView l={location} data={data} /> : null}
           {cell ? <CellView c={cell} /> : null}
           {placeHit ? <PlaceView p={placeHit} dropped={around?.dropped_closed ?? 0} /> : null}
-          {!location && !cell && !placeHit ? <Overview data={data} demo={demo} /> : null}
+          {gap ? <GapView g={gap} demo={demo} /> : null}
+          {move ? <MoveView m={move} demo={demo} /> : null}
+          {!location && !cell && !placeHit && !gap && !move ? <Overview data={data} demo={demo} /> : null}
         </div>
       ) : (
         <div className="stack" role="tabpanel" id="proof-body" aria-labelledby="tab-proof" tabIndex={0}>
@@ -103,6 +107,70 @@ function Inspector({ data, around, selection, demo }: { data: CrowdMapData; arou
         </div>
       )}
     </aside>
+  );
+}
+
+function GapView({ g, demo }: { g: NonNullable<CrowdMapData["gaps"]>; demo: boolean }) {
+  const when = g.looked_up ? new Date(g.looked_up).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : null;
+  return (
+    <>
+      <div>
+        <p className="eyebrow">Candidate gap</p>
+        <h2 className="insp__t" data-testid="gap-title">
+          {g.groups.length === 1 ? `${g.groups[0]!.label} has` : `${g.groups.length} groups have`} no place of {g.groups.length === 1 ? "its" : "their"} own within {g.radius_m} m
+        </h2>
+      </div>
+      <Label kind="modelled" detail="idea to check" />
+      <ul className="legend-list" role="list" aria-label="Groups with no place of their own">
+        {g.groups.map((x) => (
+          <li key={x.index}>
+            <i className="tribe__dot" style={{ background: `var(${GROUP_VARS[x.index % 3]})` }} aria-hidden="true" />
+            <span>{x.label}</span>
+          </li>
+        ))}
+      </ul>
+      <p>
+        When Qloo was given each group’s taste it listed places that differed from group to group, and for the groups above none of its first ten
+        {g.category ? ` ${g.category}` : ""} places was their own. That makes this a candidate, not a finding: Qloo’s place data is thin and can be stale, so check on the
+        ground whether such a place exists before acting on it.
+      </p>
+      <p className="meta">
+        Source: Grow{when ? `, looked up ${when}` : ""}, from stored results (nothing is asked of Qloo to draw this). Sample size and the checks that allowed this claim are on the Grow page.
+        {demo ? null : (
+          <>
+            {" "}
+            <Link href="/app/grow">Open Grow</Link>.
+          </>
+        )}
+      </p>
+    </>
+  );
+}
+
+function MoveView({ m, demo }: { m: NonNullable<CrowdMapData["moves"][number]>; demo: boolean }) {
+  const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  return (
+    <>
+      <div>
+        <p className="eyebrow">A change you logged</p>
+        <h2 className="insp__t" data-testid="move-title">
+          {m.title}
+        </h2>
+      </div>
+      <p>
+        From {day(m.started_on)}
+        {m.ended_on ? ` to ${day(m.ended_on)}` : ", still going"}.
+      </p>
+      <p className="meta">
+        The flag marks the week it began, so the scans either side of it can be read together. A flag is not a result: it never says the change caused anything.
+        {demo ? null : (
+          <>
+            {" "}
+            <Link href="/app/moves">Open Moves</Link> for the before and after.
+          </>
+        )}
+      </p>
+    </>
   );
 }
 
@@ -239,8 +307,36 @@ function PlaceView({ p, dropped }: { p: AroundPlace; dropped: number }) {
   );
 }
 
-function Timeline({ data, period, onPeriod }: { data: CrowdMapData; period: CrowdMapData["period"]; onPeriod: (p: CrowdMapData["period"]) => void }) {
+function Timeline({
+  data,
+  period,
+  onPeriod,
+  flags,
+  selection,
+  onSelect,
+}: {
+  data: CrowdMapData;
+  period: CrowdMapData["period"];
+  onPeriod: (p: CrowdMapData["period"]) => void;
+  flags: boolean;
+  selection: Selection;
+  onSelect: (s: Selection) => void;
+}) {
   const max = Math.max(1, ...data.timeline.buckets.map((b) => b.scans));
+  // each move is flagged in the bucket it began in: the day or week that contains its first day. One that began when no scan was
+  // recorded has no bar to stand on, so it is counted below instead of being pinned to a neighbouring week.
+  const span = data.timeline.unit === "day" ? 1 : 7;
+  const at = (iso: string) => {
+    const when = new Date(iso).getTime();
+    return data.timeline.buckets.findIndex((b) => {
+      const from = new Date(b.start).getTime();
+      return when >= from && when < from + span * 86_400_000;
+    });
+  };
+  const flagged = flags
+    ? data.moves.map((mv) => ({ mv, at: at(mv.started_on) })).filter((f) => f.at >= 0)
+    : [];
+  const unplaced = flags ? data.moves.length - flagged.length : 0;
   return (
     <div className="timeline" data-testid="timeline">
       <div className="timeline__top">
@@ -268,6 +364,35 @@ function Timeline({ data, period, onPeriod }: { data: CrowdMapData; period: Crow
       ) : (
         <p className="meta">No scans in this period.</p>
       )}
+      {flags && data.timeline.buckets.length ? (
+        <div className="mapx__flags" data-testid="move-flags" role="group" aria-label="Changes you logged">
+          {data.timeline.buckets.map((b, i) => (
+            <span key={b.start}>
+              {flagged
+                .filter((f) => f.at === i)
+                .map((f) => (
+                  <button
+                    key={f.mv.id}
+                    type="button"
+                    className="moveflag"
+                    data-testid="move-flag"
+                    title={`${f.mv.title}, from ${f.mv.started_on}`}
+                    aria-label={`Change: ${f.mv.title}, from ${f.mv.started_on}`}
+                    aria-pressed={selection?.kind === "move" && selection.id === f.mv.id}
+                    onClick={() => onSelect({ kind: "move", id: f.mv.id })}
+                  >
+                    <Icon name="flag" size="sm" />
+                  </button>
+                ))}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {flags && unplaced > 0 ? (
+        <p className="meta" data-testid="move-unplaced">
+          {unplaced} of your logged {unplaced === 1 ? "change" : "changes"} began {data.timeline.unit === "day" ? "on a day" : "in a week"} with no scan in this period, so {unplaced === 1 ? "it has" : "they have"} no flag here.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -319,6 +444,28 @@ function ListView({ data, around, onSelect }: { data: CrowdMapData; around: Arou
               <td>{p.distance_m === null ? "" : `${p.distance_m} m`}</td>
             </tr>
           ))}
+          {data.gaps ? (
+            <tr>
+              <td>Candidate gap</td>
+              <th scope="row">
+                <button className="btn btn--sm btn--ghost" type="button" onClick={() => onSelect({ kind: "gap", id: "area" })}>
+                  {data.gaps.groups.map((g) => g.label).join(", ")}
+                </button>
+              </th>
+              <td>no place of their own within {data.gaps.radius_m} m</td>
+            </tr>
+          ) : null}
+          {data.moves.map((mv) => (
+            <tr key={mv.id}>
+              <td>Change you logged</td>
+              <th scope="row">
+                <button className="btn btn--sm btn--ghost" type="button" onClick={() => onSelect({ kind: "move", id: mv.id })}>
+                  {mv.title}
+                </button>
+              </th>
+              <td>from {mv.started_on}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
@@ -331,7 +478,7 @@ export function MapWorkspace({ base, demo = false }: { base: string; demo?: bool
   const initial = typeof window === "undefined" ? new URLSearchParams() : new URLSearchParams(window.location.search);
   const [period, setPeriod] = useState<CrowdMapData["period"]>((["7d", "4w"].includes(initial.get("period") ?? "") ? initial.get("period") : "all") as CrowdMapData["period"]);
   const [layers, setLayers] = useState<Set<LayerId>>(
-    () => new Set((initial.get("layers") ?? "sites,groups,catchment,around").split(",").filter((l): l is LayerId => LAYERS.some((x) => x.id === l))),
+    () => new Set((initial.get("layers") ?? "sites,groups,catchment,around,gaps,moves").split(",").filter((l): l is LayerId => LAYERS.some((x) => x.id === l))),
   );
   const [selection, setSelection] = useState<Selection>(() => parseSel(initial.get("sel")));
   const [view, setView] = useState<"map" | "list">(initial.get("view") === "list" ? "list" : "map");
@@ -478,7 +625,7 @@ export function MapWorkspace({ base, demo = false }: { base: string; demo?: bool
               : ""}
             Sites and neighbourhoods below {data.min_group} guests are never described. Base map: OpenFreeMap, © OpenStreetMap contributors.
           </p>
-          <Timeline data={data} period={period} onPeriod={setPeriod} />
+          <Timeline data={data} period={period} onPeriod={setPeriod} flags={layers.has("moves")} selection={selection} onSelect={onSelect} />
         </div>
         <Inspector data={data} around={around} selection={selection} demo={demo} />
       </div>

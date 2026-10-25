@@ -73,6 +73,12 @@ class Settings(BaseSettings):
     demo_runs_per_day: int = 60
     demo_searches_per_day: int = 300
     demo_compares_per_day: int = 100
+    demo_place_searches_per_day: int = (
+        400  # venue lookups on MusicBrainz for visitors, for the whole site
+    )
+    demo_requests_per_day: int = (
+        5  # venues visitors may ask for, for the whole site; each costs over a hundred Qloo calls
+    )
 
     # Run the background worker inside the API process. Fine for one small instance and for development; a production
     # deployment runs `python -m nigiwai_api.worker` as its own service and turns this off.

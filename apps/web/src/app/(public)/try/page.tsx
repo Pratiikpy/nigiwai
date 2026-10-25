@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { DemoVenues } from "@/components/DemoVenues";
+import { FindVenue } from "@/components/FindVenue";
 import { Icon } from "@/components/Icon";
 
 export const metadata: Metadata = {
@@ -25,6 +26,8 @@ export default function TryPage() {
         </h2>
         <DemoVenues />
       </section>
+
+      <FindVenue />
 
       <div className="two">
         <section className="card" aria-labelledby="h-how">

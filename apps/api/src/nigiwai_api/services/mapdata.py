@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from ..db import transaction
 from . import around as around_service
+from . import grow as grow_service
 from . import tribes
 from .geocode import Geocoder, normalise_district
 
@@ -107,6 +108,23 @@ async def build(
         ).all()
         prev = await tribes.latest(conn, business_id)
         rows = await _responses(conn, business_id)
+        moves = [
+            {
+                "id": r.id,
+                "kind": r.kind,
+                "title": r.title,
+                "started_on": r.started_on.isoformat(),
+                "ended_on": r.ended_on.isoformat() if r.ended_on else None,
+            }
+            for r in (
+                await conn.execute(
+                    text(
+                        "SELECT id::text AS id, kind, title, started_on, ended_on FROM move WHERE business_id = :b ORDER BY started_on, created_at"
+                    ),
+                    {"b": business_id},
+                )
+            ).all()
+        ]
 
     result = tribes._from_json(prev.result) if prev is not None else None
     grouped = result is not None and result.state in ("provisional", "named")
@@ -247,6 +265,10 @@ async def build(
             }
         )
 
+    # Gap candidates come from the last Grow run and only while it was made for the groups as they are now: a groups' index means
+    # nothing against another version. Stored rows only; nothing is asked of Qloo here.
+    gaps = await _gaps(engine, tenant_id, business_id, out_locations)
+
     return {
         "business": business.name,
         "period": period,
@@ -270,6 +292,8 @@ async def build(
         "catchment": catchment,
         "catchment_hidden": {"districts": hidden_districts, "guests": hidden_guests},
         "catchment_pending": pending,
+        "gaps": gaps,
+        "moves": moves,
         "timeline": {
             "unit": "day" if period == "7d" else "week",
             "buckets": [{"start": d.isoformat(), "scans": n} for d, n in sorted(weeks.items())][
@@ -278,6 +302,34 @@ async def build(
             "total": placed_in,
         },
         "min_group": MIN_GROUP,
+    }
+
+
+async def _gaps(
+    engine: AsyncEngine, tenant_id: UUID, business_id: UUID, locations: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """Groups that Grow found no place of their own for, inside the venue's radius: a candidate to check on the ground, never a
+    claim. None when Grow has not run, ran for older groups, or found no such group."""
+    if not locations:
+        return None
+    doc = await grow_service.get(engine, tenant_id, business_id)
+    run = doc.get("run") if doc.get("state") == "ready" else None
+    places = run.get("places") if isinstance(run, dict) else None
+    near = (
+        places.get("nearby") if isinstance(places, dict) and places.get("status") == "ok" else None
+    )
+    found = near.get("gaps") if isinstance(near, dict) else None
+    if not found or not isinstance(places, dict):
+        return None
+    site = locations[0]
+    return {
+        "location_id": site["id"],
+        "lat": site["lat"],
+        "lon": site["lon"],
+        "radius_m": places.get("radius_m") or site["radius_m"],
+        "groups": [{"index": g["group_index"], "label": g["group"]} for g in found],
+        "category": places.get("category"),
+        "looked_up": doc.get("updated_at"),
     }
 
 

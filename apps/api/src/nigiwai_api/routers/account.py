@@ -6,10 +6,13 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import EmailStr, Field
+from sqlalchemy import text
 
+from ..db import transaction
 from ..deps import Session, State, Tenant, client_ip_hash
 from ..schemas import Name, Strict
 from ..services import account as service
+from ..services import account_export
 
 router = APIRouter(prefix="/v1/account", tags=["account"])
 tenant_router = APIRouter(prefix="/v1/tenants/{tenant_id}", tags=["account"])
@@ -115,6 +118,34 @@ async def delete_login(
     response.delete_cookie(state.settings.session_cookie, path="/")
     response.status_code = 204
     return response
+
+
+@tenant_router.get("/export")
+async def export_account(state: State, access: Tenant) -> Response:
+    """A copy of the account's data as a ZIP, for an owner (what is in it and what is left out is in the file's README)."""
+    if access.role != "owner":
+        raise HTTPException(
+            status_code=403, detail="Only an owner can download a copy of the account's data."
+        )
+    await _guarded(state, f"export:{access.user_id}", 5, 3600.0)
+    data, name = await account_export.build(state.engine, access.tenant_id, access.user_id)
+    async with transaction(
+        state.engine, tenant_id=access.tenant_id, user_id=access.user_id
+    ) as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO audit_log (tenant_id, actor, action, target) VALUES (:t, :a, 'account.export', :n)"
+            ),
+            {"t": access.tenant_id, "a": str(access.user_id), "n": name},
+        )
+    return Response(
+        content=data,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{name}"',
+            "Cache-Control": "private, no-store",
+        },
+    )
 
 
 @tenant_router.post("/delete-account", status_code=204)

@@ -121,10 +121,10 @@ export function LineupStart({ tenantPath, businessId, canWrite }: { tenantPath: 
         <form className="stack stack--sm" onSubmit={search}>
           <div className="field">
             <label htmlFor="lineup-q">Venue name</label>
-            <div className="row row--wrap">
+            <div className="findrow">
               <input
                 id="lineup-q"
-                className="input grow"
+                className="input"
                 value={query}
                 maxLength={100}
                 onChange={(e) => setQuery(e.target.value)}

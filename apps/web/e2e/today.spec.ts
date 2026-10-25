@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { openAllWeek, plantCrowd, plantLineup, plantSuggestions, publishedVenue, resetRateLimits, setRhythm, setTheme, shot, signIn, sql, watch } from "./helpers";
+import { openAllWeek, plantCrowd, plantLineup, plantSuggestions, publishedVenue, resetRateLimits, setRhythm, setTheme, shot, signIn, sql, watch, plantGrow } from "./helpers";
 
 test.beforeEach(async () => resetRateLimits());
 
@@ -226,5 +226,55 @@ test("today: a cafe is offered an idea for its quietest stretch from its own sca
   await idea.getByRole("button", { name: "Log this move" }).click();
   await expect(idea.getByRole("button", { name: "Logged as a move" })).toBeVisible();
   expect((await sql("SELECT weekdays, hour_from, hour_to FROM move WHERE business_id = $1", [venue.businessId])).rows).toEqual([{ weekdays: [2], hour_from: 14, hour_to: 17 }]);
+  expect(problems.filter((p) => !prefetch.test(p))).toEqual([]);
+});
+
+async function fittedGroups(businessId: string): Promise<void> {
+  await sql("UPDATE job SET run_after = now() WHERE business_id = $1", [businessId]);
+  await expect
+    .poll(async () => (await sql("SELECT state FROM tribe_version WHERE business_id = $1 ORDER BY version DESC LIMIT 1", [businessId])).rows[0]?.state, { timeout: 120_000 })
+    .toMatch(/provisional|named/);
+}
+
+test("today: a third action reaches the people the crowd is missing, from Grow, says what it rests on, and can be accepted and logged", async ({ page, request }, info) => {
+  test.setTimeout(300_000);
+  const problems = watch(page);
+  const venue = await publishedVenue(request);
+  await plantCrowd(venue.businessId, venue.qrId, 90, 7);
+  await setRhythm(venue.qrId);
+  await openAllWeek(venue.businessId);
+  await plantLineup(venue.tenantId, venue.businessId, { events: 40 });
+  await fittedGroups(venue.businessId);
+  await plantSuggestions(venue.tenantId, venue.businessId, [
+    { name: "Velvet Harbour", score: 88, best: "Indie rock acts" },
+    { name: "The Quiet Engines", score: 81, best: "Jazz acts" },
+  ]);
+  await plantGrow(venue.tenantId, venue.businessId, "crowd");
+  await signIn(page, venue.email);
+  await page.goto("/app/today");
+
+  const actions = page.getByTestId("action");
+  await expect(actions).toHaveCount(3);
+  const third = actions.nth(2);
+  await expect(third.getByRole("heading").first()).toContainText(/^Try .+ for people like /);
+  await expect(third).toContainText("Reach people you are missing");
+  const evidence = third.getByLabel("Evidence");
+  await expect(evidence.getByText("Observed").first()).toBeVisible();
+  await expect(evidence.getByText("Measured").first()).toBeVisible();
+  await expect(evidence.getByText("Modelled").first()).toBeVisible();
+  await expect(third).toContainText("hypothesis, not a forecast");
+  await shot(page, info, "today-third");
+  await a11y(page, "today third action");
+  await setTheme(page, "dark");
+  await shot(page, info, "today-third", "dark");
+  await setTheme(page, "light");
+
+  await third.getByRole("button", { name: "Accept" }).click();
+  await expect(third).toHaveAttribute("data-state", "accepted");
+  await third.getByRole("button", { name: "Log this move" }).click();
+  await expect(third.getByRole("button", { name: "Logged as a move" })).toBeDisabled();
+  const moves = await sql<{ title: string; weekdays: number[] }>("SELECT title, weekdays FROM move WHERE business_id = $1", [venue.businessId]);
+  expect(moves.rows).toHaveLength(1);
+  expect(moves.rows[0]!.title).toMatch(/^Try .+ for people like /);
   expect(problems.filter((p) => !prefetch.test(p))).toEqual([]);
 });

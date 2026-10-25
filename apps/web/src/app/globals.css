@@ -222,6 +222,11 @@ fieldset.card > legend + * { clear: both; }
   border-bottom: 0;
   border-radius: 3px 3px 0 0;
 }
+.mapx__flags { display: flex; gap: 4px; margin-top: -2px; }
+.mapx__flags > span { flex: 1 1 0; min-width: 4px; display: flex; justify-content: center; }
+.moveflag { display: inline-grid; place-items: center; width: 24px; min-height: 24px; padding: 0; border: 2px solid var(--ink); border-radius: 50%; background: var(--surface); color: var(--ink); }
+.moveflag[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+@media (pointer: coarse) { .moveflag { width: 32px; min-height: 32px; } }
 .listtable {
   width: 100%;
   font-size: var(--t-sm);
@@ -498,5 +503,5 @@ fieldset.card > legend + * { clear: both; }
 .rc-input { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; }
 .btn--danger { border-color: var(--danger); color: var(--danger); background: var(--surface); }
 .btn--danger:hover:not(:disabled) { background: var(--danger-soft); }
-.tm-row > .disc { flex: 1 1 100%; }
+.tm-row > .disc, .tm-row > .stack { flex: 1 1 100%; }
 .btn--fit { align-self: flex-start; }

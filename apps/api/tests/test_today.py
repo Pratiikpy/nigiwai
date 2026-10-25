@@ -389,3 +389,150 @@ async def test_without_groups_there_is_no_idea_and_a_music_room_with_two_act_act
         (json.dumps(WEEK), bare.business_id),
     )
     assert (await board(other, bare))["actions"] == []
+
+
+# ---- a third action, from the people the crowd is missing ----------------------------------------------------------
+async def plant_ghost_run(
+    world: World,
+    admin: psycopg.Connection[Any],
+    owner: Any,
+    venue: Any,
+    *,
+    stale: bool = False,
+    ghosts_status: str = "ok",
+    carrying: int | None = None,
+) -> None:
+    from nigiwai_api.services import grow
+
+    state = world.app.state.nigiwai
+    current = await grow._current_ref(
+        state.engine, uuid.UUID(owner.tenant_id), uuid.UUID(venue.business_id)
+    )
+    acts = [
+        {"entity_id": f"e{i}", "name": f"Sample Act {n}", "genres": ["dream pop"]}
+        for i, n in enumerate("ABC")
+    ]
+    run = {
+        "basis": {
+            "kind": current["kind"],
+            "ref": current["ref"],
+            "label": "x",
+            "provisional": False,
+        },
+        "groups": [
+            {"index": 0, "label": "Group A", "share": 0.5},
+            {"index": 1, "label": "Group B", "share": 0.3},
+        ],
+        "ghosts": {
+            "status": ghosts_status,
+            "reason": "",
+            "unit": "guests",
+            "act_similarity": 0.1,
+            "groups_read": [0, 1],
+            "skipped": [],
+            "limit": {
+                "similarity_max": 0.5,
+                "absent_share": 0.05,
+                "bridge_share": 0.25,
+                "min_acts": 2,
+                "min_group": 10,
+            },
+            "items": [
+                {
+                    "group_index": 0,
+                    "tag_id": "tag-dream",
+                    "tag": "Dream pop",
+                    "bridges": [],
+                    "carrying": carrying,
+                    "unit": "guests",
+                    "neighbours_with_tag": 3,
+                    "acts": acts,
+                }
+            ]
+            if ghosts_status == "ok"
+            else [],
+        },
+        "places": {"status": "unavailable", "reason": "not used here"},
+        "trace_ids": [],
+        "generated_at": "2026-10-25T00:00:00+00:00",
+    }
+    admin.execute(
+        "INSERT INTO grow_run (business_id, tenant_id, status, basis_kind, basis_ref, result)"
+        " VALUES (%s, %s, 'ready', %s, %s, %s::jsonb)",
+        (
+            venue.business_id,
+            owner.tenant_id,
+            current["kind"],
+            ("old-version" if stale else current["ref"]),
+            json.dumps(run),
+        ),
+    )
+
+
+async def test_a_run_of_ghost_customers_gives_the_board_a_third_action_that_can_be_accepted_and_logged(
+    world: World, admin: psycopg.Connection[Any]
+) -> None:
+    owner = await sign_up(world)
+    venue = await make_venue(owner)
+    doc = await full_board(world, admin, owner, venue)
+    assert [a["kind"] for a in doc["actions"]] == ["Fill an empty chair", "Book an act"]
+    await plant_ghost_run(world, admin, owner, venue)
+    doc = await board(owner, venue)
+    assert [a["kind"] for a in doc["actions"]] == [
+        "Fill an empty chair",
+        "Book an act",
+        "Reach people you are missing",
+    ]
+    ghost = doc["actions"][2]
+    assert ghost["title"] == "Try Dream pop for people like Group A"
+    assert "Sample Act A, Sample Act B and Sample Act C" in ghost["why"]
+    assert [e["label"] for e in ghost["evidence"]] == ["observed", "measured", "modelled"]
+    assert "Fewer than 10 of your guests carry Dream pop." in ghost["evidence"][1]["text"]
+    assert "hypothesis, not a forecast" in ghost["evidence"][2]["text"]
+    assert ghost["act"] is None and ghost["fit"] is None and ghost["slot"] is None
+    # a number is shown only when it is one the product shows (ten or more)
+    admin.execute("DELETE FROM grow_run")
+    await plant_ghost_run(world, admin, owner, venue, carrying=14)
+    assert (
+        "14 of your guests carry Dream pop."
+        in (await board(owner, venue))["actions"][2]["evidence"][1]["text"]
+    )
+    # accepted, then logged as a move that covers the whole week, which Moves can read
+    root = f"/v1/tenants/{owner.tenant_id}{base(owner, venue)}/today/actions/{ghost['key']}"
+    assert (
+        await owner.client.put(root, json={"state": "accepted"}, headers=owner.headers)
+    ).status_code == 200
+    assert (await owner.client.post(f"{root}/log", headers=owner.headers)).json()["new"] is True
+    assert admin.execute("SELECT weekdays, hour_from, hour_to FROM move").fetchall() == [
+        ([], None, None)
+    ]
+    moves = await owner.get(f"{base(owner, venue)}/moves")
+    assert moves.status_code == 200, moves.text
+
+
+async def test_the_third_action_needs_a_run_made_for_the_groups_as_they_are_and_that_allowed_ghosts(
+    world: World, admin: psycopg.Connection[Any]
+) -> None:
+    owner = await sign_up(world)
+    venue = await make_venue(owner)
+    await full_board(world, admin, owner, venue)
+    for kwargs in (
+        {"stale": True},
+        {"ghosts_status": "none"},
+        {"ghosts_status": "not_group_specific"},
+    ):
+        admin.execute("DELETE FROM grow_run")
+        await plant_ghost_run(world, admin, owner, venue, **kwargs)
+        kinds = [a["kind"] for a in (await board(owner, venue))["actions"]]
+        assert kinds == ["Fill an empty chair", "Book an act"], kwargs
+    # a cafe: an idea for its quiet stretch, a chair to fill and the people it is missing, never more than three
+    admin.execute("DELETE FROM grow_run")
+    admin.execute("UPDATE business SET type = 'cafe'")
+    await plant_ghost_run(world, admin, owner, venue)
+    kinds = [a["kind"] for a in (await board(owner, venue))["actions"]]
+    assert kinds == [
+        "Aim something at a quiet stretch",
+        "Fill an empty chair",
+        "Reach people you are missing",
+    ]
+    assert len(kinds) <= service.MAX_ACTIONS

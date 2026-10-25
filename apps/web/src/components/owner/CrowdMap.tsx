@@ -110,8 +110,8 @@ export function CrowdMap({ data, around, layers, selection, theme, onSelect, onP
           latest.current.onProblem("The base map couldn’t be loaded, so streets are missing. Your sites and layers still show.");
         }
       });
-      const sources = ["catchment", "radius", "around"];
-      const layerIds = ["catchment-fill", "catchment-line", "radius-line", "around-dot", "around-label"];
+      const sources = ["catchment", "radius", "around", "gaps"];
+      const layerIds = ["catchment-fill", "catchment-line", "radius-line", "around-dot", "around-label", "gaps-fill", "gaps-line"];
 
       draw.current = () => {
         if (!map.current || !styled.current || !lib.current) return;
@@ -144,6 +144,22 @@ export function CrowdMap({ data, around, layers, selection, theme, onSelect, onP
             features: d.locations.map((l) => ({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: circle(l.lat, l.lon, l.radius_m) } })),
           },
         });
+        const gap = d.gaps;
+        mm.addSource("gaps", {
+          type: "geojson",
+          data: {
+            type: "FeatureCollection",
+            features: gap
+              ? [
+                  {
+                    type: "Feature",
+                    properties: { selected: sel?.kind === "gap" ? 1 : 0 },
+                    geometry: { type: "Polygon", coordinates: [circle(gap.lat, gap.lon, gap.radius_m)] },
+                  },
+                ]
+              : [],
+          },
+        });
         mm.addSource("around", {
           type: "geojson",
           data: {
@@ -163,6 +179,21 @@ export function CrowdMap({ data, around, layers, selection, theme, onSelect, onP
           source: "radius",
           paint: { "line-color": ink, "line-opacity": 0.55, "line-width": 2, "line-dasharray": [2, 3] },
           layout: { visibility: on.has("sites") ? "visible" : "none" },
+        });
+        // A candidate gap is drawn as a dashed, lightly filled area in the warning colour: never as a place, because nothing is there.
+        mm.addLayer({
+          id: "gaps-fill",
+          type: "fill",
+          source: "gaps",
+          paint: { "fill-color": css("--warn"), "fill-opacity": ["case", ["==", ["get", "selected"], 1], 0.26, 0.14] },
+          layout: { visibility: on.has("gaps") ? "visible" : "none" },
+        });
+        mm.addLayer({
+          id: "gaps-line",
+          type: "line",
+          source: "gaps",
+          paint: { "line-color": css("--warn"), "line-width": ["case", ["==", ["get", "selected"], 1], 4, 2.5], "line-dasharray": [1.5, 2] },
+          layout: { visibility: on.has("gaps") ? "visible" : "none" },
         });
         mm.addLayer({
           id: "catchment-fill",
@@ -240,12 +271,14 @@ export function CrowdMap({ data, around, layers, selection, theme, onSelect, onP
           box.dataset.pins = String(on.has("sites") ? d.locations.length : 0);
           box.dataset.hexes = String(on.has("catchment") ? d.catchment.length : 0);
           box.dataset.places = String(on.has("around") ? places.length : 0);
+          box.dataset.gaps = String(on.has("gaps") && d.gaps ? d.gaps.groups.length : 0);
         }
 
         if (!fitted.current && (d.locations.length || places.length)) {
           const b = new lib.current.LngLatBounds();
           for (const l of d.locations) b.extend([l.lon, l.lat]);
           for (const c of d.catchment) for (const [la, lo] of c.boundary) b.extend([lo, la]);
+          if (d.gaps) for (const [lo, la] of circle(d.gaps.lat, d.gaps.lon, d.gaps.radius_m, 16)) b.extend([lo, la]);
           for (const p of places) b.extend([p.lon, p.lat]);
           if (!b.isEmpty()) {
             mm.fitBounds(b, { padding: 60, maxZoom: 14.5, duration: 0 });
@@ -263,16 +296,17 @@ export function CrowdMap({ data, around, layers, selection, theme, onSelect, onP
         const cell = e.features?.[0]?.properties?.cell as string | undefined;
         if (cell) latest.current.onSelect({ kind: "cell", id: cell });
       });
+      m.on("click", "gaps-fill", () => latest.current.onSelect({ kind: "gap", id: "area" }));
       m.on("click", "around-dot", (e) => {
         const id = e.features?.[0]?.properties?.id as string | undefined;
         if (id) latest.current.onSelect({ kind: "place", id });
       });
-      for (const layer of ["catchment-fill", "around-dot"]) {
+      for (const layer of ["catchment-fill", "around-dot", "gaps-fill"]) {
         m.on("mouseenter", layer, () => (m.getCanvas().style.cursor = "pointer"));
         m.on("mouseleave", layer, () => (m.getCanvas().style.cursor = ""));
       }
       m.on("click", (e) => {
-        const hit = m.queryRenderedFeatures(e.point, { layers: ["catchment-fill", "around-dot"].filter((id) => m.getLayer(id)) });
+        const hit = m.queryRenderedFeatures(e.point, { layers: ["catchment-fill", "around-dot", "gaps-fill"].filter((id) => m.getLayer(id)) });
         if (!hit.length) latest.current.onSelect(null);
       });
       m.getContainer().setAttribute("data-ready", "1");

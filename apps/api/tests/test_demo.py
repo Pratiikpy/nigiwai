@@ -3,8 +3,11 @@ reach or change anything else. MusicBrainz is mocked at the network edge, Qloo i
 
 from __future__ import annotations
 
+import asyncio
 import json
+import re
 import uuid
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
@@ -390,7 +393,17 @@ async def test_anyone_can_open_a_ready_demo_venue_and_nothing_in_it_names_the_te
     assert str(DEMO) not in blob and str(business_id) not in blob
 
     assert seen["venue"]["name"] == "Mercury Test Room" and seen["venue"]["city"] == "New York"
-    assert set(seen["venue"]) == {"slug", "name", "city", "blurb", "summary", "refreshed_at"}
+    assert set(seen["venue"]) == {
+        "slug",
+        "name",
+        "city",
+        "blurb",
+        "summary",
+        "refreshed_at",
+        "requested",
+        "expires_at",
+    }
+    assert seen["venue"]["requested"] is False and seen["venue"]["expires_at"] is None
     assert seen["basis"]["use"] == "lineup" and seen["basis"]["lineup"]["sufficient"]
     result = seen["suggestions"]["result"]
     assert seen["suggestions"]["status"] == "ready" and len(result["top"]) == 3
@@ -799,3 +812,547 @@ async def test_a_ready_demo_venue_built_before_grow_existed_gets_a_run_on_the_ne
     calls = len(world.qloo.calls)
     assert await worker.refresh_demo(st.engine, st.guard, st.musicbrainz, refresh) == []
     assert len(world.qloo.calls) == calls  # a venue that has a run is left alone
+
+
+# ---------------------------------------------------------------------------------------------------- venues a visitor asks for
+ASKED = demo_service.slug_for(lineup.PlaceHit(PLACE, "Mercury Lounge", "New York", None, None))
+OTHER_PLACE = mbid(777)
+OTHER_ASKED = demo_service.slug_for(
+    lineup.PlaceHit(OTHER_PLACE, "Second Room", "New York", None, None)
+)
+
+
+def mock_lookup(
+    router: respx.MockRouter,
+    place_id: str = PLACE,
+    *,
+    name: str = "Mercury Lounge",
+    coordinates: bool = True,
+    status: int = 200,
+) -> None:
+    body: dict[str, Any] = {
+        "id": place_id,
+        "name": name,
+        "type": "Venue",
+        "address": "217 East Houston St., New York, NY 10002",
+        "area": {"name": "New York"},
+    }
+    if coordinates:
+        body["coordinates"] = {"latitude": "40.7222", "longitude": "-73.9871"}
+    router.get(f"{MB}/place/{place_id}").mock(
+        return_value=httpx.Response(status, json=body if status == 200 else {"error": "Not Found"})
+    )
+
+
+def mock_lineups(router: respx.MockRouter, events: int = 30) -> None:
+    router.get(f"{MB}/event").mock(return_value=httpx.Response(200, json=events_body(events, 30)))
+
+
+async def work(world: World) -> bool:
+    st = state_of(world)
+    return await worker.work_once(
+        st.engine, st.guard, st.musicbrainz, worker.DemoRefresh(st.llm, st.limiter, 100)
+    )
+
+
+def jobs(admin: psycopg.Connection[Any]) -> list[tuple[Any, ...]]:
+    return admin.execute(
+        "SELECT kind, state FROM job WHERE kind = 'demo_build' ORDER BY id"
+    ).fetchall()
+
+
+def business_id_of(admin: psycopg.Connection[Any], slug: str) -> Any:
+    row = admin.execute("SELECT business_id FROM demo_venue WHERE slug = %s", (slug,)).fetchone()
+    assert row is not None
+    return row[0]
+
+
+async def test_a_visitor_searches_for_a_venue_and_sees_which_ones_are_already_built(
+    make_world: Any, admin: psycopg.Connection[Any]
+) -> None:
+    async with make_world(musicbrainz_url=MB, demo_place_searches_per_day=4) as world:
+        business_id = plant_demo(admin, world, slug="mercury-lounge")
+        admin.execute(
+            "INSERT INTO lineup_profile (tenant_id, business_id, place_mbid, place_name, status)"
+            " VALUES (%s, %s, %s, 'Mercury Lounge', 'ready')"
+            " ON CONFLICT (business_id) DO UPDATE SET place_mbid = EXCLUDED.place_mbid",
+            (DEMO, business_id, PLACE),
+        )
+        anon = world.client()
+        with respx.mock(assert_all_called=False) as router:
+            unplaced = {"id": mbid(5), "name": "Mercury Rising", "area": {"name": "Austin"}}
+            here = {
+                "id": PLACE,
+                "name": "Mercury Lounge",
+                "area": {"name": "New York"},
+                "address": "217 East Houston St., New York, NY 10002",
+                "coordinates": {"latitude": "40.7222", "longitude": "-73.9871"},
+            }
+            router.get(f"{MB}/place").mock(
+                return_value=httpx.Response(200, json={"places": [here, unplaced]})
+            )
+            res = await anon.get(f"{API}/find", params={"q": "Mercury"})
+        assert res.status_code == 200
+        places = res.json()["places"]
+        assert [p["name"] for p in places] == ["Mercury Lounge", "Mercury Rising"]
+        # the venue that is already built points at its demo venue; the one with no position cannot be built at all
+        assert places[0]["slug"] == "mercury-lounge" and places[0]["status"] == "ready"
+        assert places[0]["mappable"] is True
+        assert places[1]["slug"] is None and places[1]["mappable"] is False
+        blob = strings(res.json())
+        assert str(DEMO) not in blob and str(business_id) not in blob
+
+        # junk is refused before MusicBrainz is asked, and does not use the site's allowance
+        for params in ({}, {"q": ""}, {"q": "ab"}, {"q": "x" * 81}):
+            assert (await anon.get(f"{API}/find", params=params)).status_code == 422, params
+
+        # MusicBrainz being down is said plainly, not as a crash
+        with respx.mock(assert_all_called=False) as router:
+            router.get(f"{MB}/place").mock(return_value=httpx.Response(500))
+            down = await anon.get(f"{API}/find", params={"q": "Other room"})
+        assert down.status_code == 503 and "not answering" in down.json()["detail"]
+
+        # the whole site has a daily allowance of look-ups: four here, two already used
+        with respx.mock(assert_all_called=False) as router:
+            router.get(f"{MB}/place").mock(return_value=httpx.Response(200, json={"places": []}))
+            codes = [
+                (await anon.get(f"{API}/find", params={"q": f"Room {i}"})).status_code
+                for i in range(4)
+            ]
+        assert codes == [200, 200, 429, 429]
+
+
+async def test_asking_for_a_venue_builds_it_in_the_worker_and_it_is_listed_nowhere(
+    make_world: Any, admin: psycopg.Connection[Any]
+) -> None:
+    async with make_world(musicbrainz_url=MB) as world:
+        three_scenes(world, range(30))
+        neighbours(admin, world)
+        anon = world.client()
+        assert ASKED == "req-mercury-lounge-d7cb37"
+        with respx.mock(assert_all_called=False) as router:
+            mock_lookup(router)
+            mock_lineups(router)
+            asked = await anon.post(f"{API}/request", json={"mbid": PLACE})
+            assert asked.status_code == 200 and asked.json() == {
+                "slug": ASKED,
+                "status": "building",
+            }
+            # the work is queued, not done inside the request, and the venue is not open yet
+            assert jobs(admin) == [("demo_build", "pending")]
+            assert (await anon.get(f"{API}/request/{ASKED}")).json() == {
+                "slug": ASKED,
+                "name": "Mercury Lounge",
+                "mbid": PLACE,
+                "status": "building",
+            }
+            assert (await anon.get(f"{API}/{ASKED}")).status_code == 503
+            # asking again while it builds changes nothing
+            again = await anon.post(f"{API}/request", json={"mbid": PLACE})
+            assert again.json() == {"slug": ASKED, "status": "building"}
+            assert jobs(admin) == [("demo_build", "pending")]
+            assert admin.execute("SELECT count(*) FROM business").fetchone() == (1,)
+
+            assert await work(world) is True
+            assert jobs(admin) == [("demo_build", "done")]
+
+        assert (await anon.get(f"{API}/request/{ASKED}")).json()["status"] == "ready"
+        venue = (await anon.get(f"{API}/{ASKED}")).json()
+        assert venue["requested"] is True and venue["name"] == "Mercury Lounge"
+        assert venue["expires_at"] is not None
+        assert venue["summary"]["events"] == 30 and venue["summary"]["acts_matched"] == 30
+        # a requested venue works like the prepared ones: suggestions, a map, a brief
+        got = (await anon.get(f"{API}/{ASKED}/suggestions")).json()
+        assert got["status"] == "ready" and got["result"]["top"]
+        assert (await anon.get(f"{API}/{ASKED}/map")).status_code == 200
+        assert (await anon.get(f"{API}/{ASKED}/brief")).status_code == 200
+        # it is a located business under the demo tenant, placed from the place's coordinates
+        located = admin.execute(
+            "SELECT b.tenant_id, round(ST_Y(l.geom::geometry)::numeric, 4)::float8, l.timezone"
+            " FROM business b JOIN location l ON l.business_id = b.id"
+        ).fetchall()
+        assert located == [(DEMO, 40.7222, "UTC")]
+        # nothing names the tenant or the underlying venue
+        blob = strings([venue, got])
+        assert str(DEMO) not in blob and str(business_id_of(admin, ASKED)) not in blob
+
+        # it is kept off the prepared list and out of the weekly rebuild, and asking again points at what exists
+        assert (await anon.get(API)).json() == []
+        admin.execute("UPDATE demo_venue SET refreshed_at = now() - interval '30 days'")
+        assert await demo_service.due_for_rebuild(state_of(world).engine) == []
+        with respx.mock(assert_all_called=False) as router:
+            mock_lookup(router)
+            assert (await anon.post(f"{API}/request", json={"mbid": PLACE})).json() == {
+                "slug": ASKED,
+                "status": "ready",
+            }
+        assert jobs(admin) == [("demo_build", "done")]
+        # and a search now finds it
+        with respx.mock(assert_all_called=False) as router:
+            router.get(f"{MB}/place").mock(
+                return_value=httpx.Response(
+                    200,
+                    json={
+                        "places": [
+                            {
+                                "id": PLACE,
+                                "name": "Mercury Lounge",
+                                "area": {"name": "New York"},
+                                "coordinates": {"latitude": "40.7222", "longitude": "-73.9871"},
+                            }
+                        ]
+                    },
+                )
+            )
+            found = (await anon.get(f"{API}/find", params={"q": "Mercury Lounge"})).json()
+        assert found["places"][0]["slug"] == ASKED and found["places"][0]["status"] == "ready"
+
+
+async def test_a_request_that_cannot_be_built_is_refused_before_anything_is_made(
+    make_world: Any, admin: psycopg.Connection[Any]
+) -> None:
+    async with make_world(musicbrainz_url=MB) as world:
+        anon = world.client()
+        bad_bodies: list[dict[str, Any]] = [
+            {},
+            {"mbid": ""},
+            {"mbid": "not-an-id"},
+            {"mbid": PLACE.upper()},
+            {"mbid": PLACE, "extra": 1},
+        ]
+        for bad in bad_bodies:
+            assert (await anon.post(f"{API}/request", json=bad)).status_code == 422, bad
+        with respx.mock(assert_all_called=False) as router:
+            mock_lookup(router, status=404)
+            gone = await anon.post(f"{API}/request", json={"mbid": PLACE})
+            assert gone.status_code == 404 and "no such place" in gone.json()["detail"]
+            mock_lookup(router, OTHER_PLACE, coordinates=False)
+            unplaced = await anon.post(f"{API}/request", json={"mbid": OTHER_PLACE})
+            assert unplaced.status_code == 422
+            assert "cannot be placed on a map" in unplaced.json()["detail"]
+            router.get(f"{MB}/place/{mbid(778)}").mock(return_value=httpx.Response(500))
+            down = await anon.post(f"{API}/request", json={"mbid": mbid(778)})
+            assert down.status_code == 503 and "not answering" in down.json()["detail"]
+        assert admin.execute("SELECT count(*) FROM demo_venue").fetchone() == (0,)
+        assert admin.execute("SELECT count(*) FROM business").fetchone() == (0,)
+        assert jobs(admin) == []
+        # the status route reports only what a visitor asked for
+        assert (await anon.get(f"{API}/request/{ASKED}")).status_code == 404
+        assert (await anon.get(f"{API}/request/Bad_Slug")).status_code == 422
+
+
+async def test_without_qloo_a_venue_cannot_be_asked_for(
+    make_world: Any, admin: psycopg.Connection[Any]
+) -> None:
+    async with make_world(with_qloo=False, musicbrainz_url=MB) as world:
+        res = await world.client().post(f"{API}/request", json={"mbid": PLACE})
+        assert res.status_code == 503 and "Qloo is not configured" in res.json()["detail"]
+        assert admin.execute("SELECT count(*) FROM demo_venue").fetchone() == (0,)
+
+
+async def test_the_whole_site_has_a_daily_allowance_of_new_venues_and_looking_again_costs_none(
+    make_world: Any, admin: psycopg.Connection[Any]
+) -> None:
+    async with make_world(musicbrainz_url=MB, demo_requests_per_day=1, trust_proxy=True) as world:
+        anon = world.client()
+        with respx.mock(assert_all_called=False) as router:
+            mock_lookup(router)
+            mock_lookup(router, OTHER_PLACE, name="Second Room")
+            assert (await anon.post(f"{API}/request", json={"mbid": PLACE})).status_code == 200
+            # the same place again costs nothing
+            for _ in range(3):
+                assert (await anon.post(f"{API}/request", json={"mbid": PLACE})).status_code == 200
+            # a different place, from anywhere, is over the allowance
+            other = world.client()
+            other.headers["x-forwarded-for"] = "203.0.113.9"
+            busy = await other.post(f"{API}/request", json={"mbid": OTHER_PLACE})
+            assert busy.status_code == 429 and busy.json()["detail"] == demo_router.BUSY
+        assert admin.execute("SELECT count(*) FROM demo_venue").fetchone() == (1,)
+        assert len(jobs(admin)) == 1
+
+
+async def test_only_so_many_requested_venues_are_kept_at_once(
+    make_world: Any, admin: psycopg.Connection[Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(demo_service, "MAX_REQUESTED_KEPT", 1)
+    async with make_world(musicbrainz_url=MB, demo_requests_per_day=50) as world:
+        anon = world.client()
+        with respx.mock(assert_all_called=False) as router:
+            mock_lookup(router)
+            mock_lookup(router, OTHER_PLACE, name="Second Room")
+            assert (await anon.post(f"{API}/request", json={"mbid": PLACE})).status_code == 200
+            full = await anon.post(f"{API}/request", json={"mbid": OTHER_PLACE})
+            assert full.status_code == 429 and "busy" in full.json()["detail"]
+            # a failed one does not hold a place
+            admin.execute("UPDATE demo_venue SET status = 'failed'")
+            assert (
+                await anon.post(f"{API}/request", json={"mbid": OTHER_PLACE})
+            ).status_code == 200
+
+
+async def test_each_network_can_ask_for_only_a_few_venues_an_hour(
+    make_world: Any, admin: psycopg.Connection[Any]
+) -> None:
+    async with make_world(musicbrainz_url=MB) as world:
+        anon = world.client()
+        with respx.mock(assert_all_called=False) as router:
+            mock_lookup(router)
+            codes = [
+                (await anon.post(f"{API}/request", json={"mbid": PLACE})).status_code
+                for _ in range(11)
+            ]
+        assert codes[:10] == [200] * 10 and codes[10] == 429
+
+
+async def test_a_lineup_too_thin_is_told_to_the_visitor_and_may_be_asked_again_after_an_hour(
+    make_world: Any, admin: psycopg.Connection[Any]
+) -> None:
+    async with make_world(musicbrainz_url=MB) as world:
+        three_scenes(world, range(30))
+        neighbours(admin, world)
+        anon = world.client()
+        with respx.mock(assert_all_called=False) as router:
+            mock_lookup(router)
+            mock_lineups(router, events=4)
+            await anon.post(f"{API}/request", json={"mbid": PLACE})
+            assert await work(world) is True
+        # a thin lineup is a result, not a fault: the job is finished, not retried
+        assert jobs(admin) == [("demo_build", "done")]
+        failed = (await anon.get(f"{API}/request/{ASKED}")).json()
+        assert failed["status"] == "failed" and "Not enough public data" in failed["reason"]
+        assert "DemoError" not in strings(failed) and "Traceback" not in strings(failed)
+        assert failed["mbid"] == PLACE and datetime.fromisoformat(
+            failed["retry_at"]
+        ) > datetime.now(UTC)
+        assert (await anon.get(f"{API}/{ASKED}")).status_code == 503
+        assert (await anon.get(API)).json() == []
+
+        # asking again straight away points at the failure and starts nothing
+        with respx.mock(assert_all_called=False) as router:
+            mock_lookup(router)
+            soon = await anon.post(f"{API}/request", json={"mbid": PLACE})
+        assert soon.json() == {"slug": ASKED, "status": "failed"}
+        assert jobs(admin) == [("demo_build", "done")]
+
+        # an hour later it may be tried again, with the same venue row
+        admin.execute("UPDATE demo_venue SET requested_at = now() - interval '2 hours'")
+        admin.execute("DELETE FROM external_cache")  # the earlier lineup was cached for a week
+        with respx.mock(assert_all_called=False) as router:
+            mock_lookup(router)
+            mock_lineups(router, events=30)
+            later = await anon.post(f"{API}/request", json={"mbid": PLACE})
+            assert later.json() == {"slug": ASKED, "status": "building"}
+            assert admin.execute("SELECT count(*) FROM demo_venue").fetchone() == (1,)
+            assert await work(world) is True
+        assert (await anon.get(f"{API}/request/{ASKED}")).json()["status"] == "ready"
+
+
+async def test_a_fault_while_building_is_not_retried_and_no_class_name_reaches_the_visitor(
+    make_world: Any, admin: psycopg.Connection[Any]
+) -> None:
+    async with make_world(musicbrainz_url=MB) as world:
+        three_scenes(world, range(30))
+        anon = world.client()
+        with respx.mock(assert_all_called=False) as router:
+            mock_lookup(router)
+            router.get(f"{MB}/event").mock(return_value=httpx.Response(500))
+            await anon.post(f"{API}/request", json={"mbid": PLACE})
+            assert await work(world) is True
+        assert jobs(admin) == [
+            ("demo_build", "done")
+        ]  # ending it here spends no further Qloo calls
+        row = admin.execute("SELECT status, error FROM demo_venue").fetchone()
+        assert row is not None and row[0] == "failed" and "LineupError" in row[1]
+        failed = (await anon.get(f"{API}/request/{ASKED}")).json()
+        assert failed["status"] == "failed"
+        assert "LineupError" not in strings(failed) and "500" not in strings(failed)
+        assert "try again" in failed["reason"]
+
+
+async def test_requested_venues_expire_after_a_week_and_take_everything_with_them(
+    make_world: Any, admin: psycopg.Connection[Any]
+) -> None:
+    async with make_world(musicbrainz_url=MB) as world:
+        three_scenes(world, range(30))
+        neighbours(admin, world)
+        anon = world.client()
+        with respx.mock(assert_all_called=False) as router:
+            mock_lookup(router)
+            mock_lookup(router, OTHER_PLACE, name="Second Room")
+            mock_lineups(router)
+            await anon.post(f"{API}/request", json={"mbid": PLACE})
+            assert await work(world) is True
+            await anon.post(f"{API}/request", json={"mbid": OTHER_PLACE})
+        old = business_id_of(admin, ASKED)
+        curated = plant_demo(admin, world, slug="mercury-lounge")
+        admin.execute(
+            "UPDATE demo_venue SET refreshed_at = now() - interval '60 days' WHERE slug = 'mercury-lounge'"
+        )
+        st = state_of(world)
+
+        # nothing is old enough yet
+        assert await demo_service.expire_requested(st.engine) == 0
+
+        admin.execute(
+            "UPDATE demo_venue SET requested_at = now() - interval '8 days' WHERE slug = %s",
+            (ASKED,),
+        )
+        assert await demo_service.expire_requested(st.engine) == 1
+        assert admin.execute("SELECT slug FROM demo_venue ORDER BY slug").fetchall() == [
+            ("mercury-lounge",),
+            (OTHER_ASKED,),
+        ]
+        for table in ("lineup_profile", "act_suggestion", "soundcheck", "location"):
+            assert admin.execute(
+                f"SELECT count(*) FROM {table} WHERE business_id = %s",
+                (old,),
+            ).fetchone() == (0,), table
+        assert admin.execute("SELECT count(*) FROM business WHERE id = %s", (old,)).fetchone() == (
+            0,
+        )
+        assert admin.execute(
+            "SELECT count(*) FROM business WHERE id = %s", (curated,)
+        ).fetchone() == (1,)
+        assert (await anon.get(f"{API}/request/{ASKED}")).status_code == 404
+        # once gone, the same place can be asked for again
+        with respx.mock(assert_all_called=False) as router:
+            mock_lookup(router)
+            fresh = await anon.post(f"{API}/request", json={"mbid": PLACE})
+        assert fresh.json() == {"slug": ASKED, "status": "building"}
+
+
+async def test_a_build_that_never_finished_is_marked_failed_so_it_can_be_asked_for_again(
+    make_world: Any, admin: psycopg.Connection[Any]
+) -> None:
+    async with make_world(musicbrainz_url=MB) as world:
+        anon = world.client()
+        with respx.mock(assert_all_called=False) as router:
+            mock_lookup(router)
+            await anon.post(f"{API}/request", json={"mbid": PLACE})
+        st = state_of(world)
+        await demo_service.expire_requested(st.engine)
+        assert (await anon.get(f"{API}/request/{ASKED}")).json()["status"] == "building"
+        admin.execute("UPDATE demo_venue SET requested_at = now() - interval '4 hours'")
+        await demo_service.expire_requested(st.engine)
+        stuck = (await anon.get(f"{API}/request/{ASKED}")).json()
+        assert stuck["status"] == "failed" and "took too long" in stuck["reason"]
+
+
+async def test_the_worker_pass_also_clears_out_expired_requests(
+    make_world: Any, admin: psycopg.Connection[Any]
+) -> None:
+    async with make_world(musicbrainz_url=MB) as world:
+        anon = world.client()
+        with respx.mock(assert_all_called=False) as router:
+            mock_lookup(router)
+            await anon.post(f"{API}/request", json={"mbid": PLACE})
+        admin.execute("UPDATE demo_venue SET requested_at = now() - interval '9 days'")
+        st = state_of(world)
+        refresh = worker.DemoRefresh(None, st.limiter, 100)
+        assert await worker.refresh_demo(st.engine, st.guard, st.musicbrainz, refresh) == []
+        assert admin.execute("SELECT count(*) FROM demo_venue").fetchone() == (0,)
+        assert admin.execute("SELECT count(*) FROM business").fetchone() == (0,)
+
+
+async def test_a_requested_venue_is_as_closed_as_a_prepared_one(
+    make_world: Any, admin: psycopg.Connection[Any]
+) -> None:
+    async with make_world(musicbrainz_url=MB) as world:
+        three_scenes(world, range(30))
+        neighbours(admin, world)
+        anon = world.client()
+        with respx.mock(assert_all_called=False) as router:
+            mock_lookup(router)
+            mock_lineups(router)
+            await anon.post(f"{API}/request", json={"mbid": PLACE})
+            assert await work(world) is True
+        # nothing about it can be changed from outside
+        for method, path in (
+            ("post", f"{API}/{ASKED}/suggestions/rebuild"),
+            ("post", f"{API}/{ASKED}/brief/share"),
+            ("delete", f"{API}/{ASKED}"),
+            ("put", f"{API}/{ASKED}"),
+            ("post", f"{API}/request/{ASKED}"),
+        ):
+            res = await getattr(anon, method)(path)
+            assert res.status_code in (404, 405, 422), (method, path)
+        assert admin.execute("SELECT count(*) FROM demo_venue").fetchone() == (1,)
+
+
+async def test_two_visitors_asking_for_the_same_place_at_once_make_one_venue_and_one_build(
+    make_world: Any, admin: psycopg.Connection[Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real = demo_service.places_known
+    arrived = 0
+    both_looked = asyncio.Event()
+
+    async def gated(engine: Any, mbids: list[str]) -> Any:
+        """Both requests look the place up before either has made it, which is the race."""
+        nonlocal arrived
+        found = await real(engine, mbids)
+        arrived += 1
+        if arrived <= 2:
+            if arrived == 2:
+                both_looked.set()
+            await both_looked.wait()
+        return found
+
+    monkeypatch.setattr(demo_service, "places_known", gated)
+    async with make_world(musicbrainz_url=MB) as world:
+        with respx.mock(assert_all_called=False) as router:
+            mock_lookup(router)
+            first, second = await asyncio.gather(
+                world.client().post(f"{API}/request", json={"mbid": PLACE}),
+                world.client().post(f"{API}/request", json={"mbid": PLACE}),
+            )
+        assert first.status_code == 200 and second.status_code == 200, (first.text, second.text)
+        assert first.json()["slug"] == second.json()["slug"] == ASKED
+        assert admin.execute("SELECT count(*) FROM demo_venue").fetchone() == (1,)
+        assert admin.execute("SELECT count(*) FROM business").fetchone() == (1,)
+        assert jobs(admin) == [("demo_build", "pending")]
+
+
+async def test_a_place_name_with_control_characters_or_an_absurd_length_is_made_safe(
+    make_world: Any, admin: psycopg.Connection[Any]
+) -> None:
+    async with make_world(musicbrainz_url=MB) as world:
+        anon = world.client()
+        with respx.mock(assert_all_called=False) as router:
+            router.get(f"{MB}/place/{PLACE}").mock(
+                return_value=httpx.Response(
+                    200,
+                    json={
+                        "id": PLACE,
+                        "name": "Bad\u0000 Room\n\t" + "x" * 300,
+                        "address": "1 Test St.\u0007\n" + "y" * 400,
+                        "area": {"name": "Some\u0000where"},
+                        "coordinates": {"latitude": "40.7", "longitude": "-73.9"},
+                    },
+                )
+            )
+            res = await anon.post(f"{API}/request", json={"mbid": PLACE})
+        assert res.status_code == 200, res.text
+        slug = res.json()["slug"]
+        assert re.fullmatch(r"req-[a-z0-9-]{1,22}-[0-9a-f]{6}", slug), slug
+        name, city = admin.execute("SELECT name, city FROM demo_venue").fetchone()  # type: ignore[misc]
+        assert name.startswith("Bad Room x") and len(name) == 100 and "\x00" not in name
+        assert city == "Somewhere"
+        address = admin.execute("SELECT address FROM location").fetchone()[0]  # type: ignore[index]
+        assert len(address) == 200 and "\x07" not in address and "\n" not in address
+
+
+async def test_a_daily_allowance_of_zero_switches_asking_off_without_touching_the_prepared_venues(
+    make_world: Any, admin: psycopg.Connection[Any]
+) -> None:
+    async with make_world(musicbrainz_url=MB, demo_requests_per_day=0) as world:
+        plant_demo(admin, world, slug="mercury-lounge")
+        anon = world.client()
+        with respx.mock(assert_all_called=False) as router:
+            mock_lookup(router)
+            res = await anon.post(f"{API}/request", json={"mbid": PLACE})
+        assert res.status_code == 429 and res.json()["detail"] == demo_router.BUSY
+        assert admin.execute("SELECT count(*) FROM demo_venue").fetchone() == (
+            1,
+        )  # only the prepared one
+        assert jobs(admin) == []
+        assert (await anon.get(f"{API}/mercury-lounge")).status_code == 200

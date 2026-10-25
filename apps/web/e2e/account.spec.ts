@@ -326,3 +326,28 @@ test("account: a person left in no account can start a venue of their own, and s
   expect(names.sort()).toEqual([second, third].sort());
   expect(problems.filter((p) => !deliberate.test(p) && !prefetch.test(p))).toEqual([]);
 });
+
+test("account: an owner downloads a copy of the account's data, and a viewer is not offered it", async ({ page }, info) => {
+  test.setTimeout(240_000);
+  const problems = watch(page);
+  const name = `Copy Me ${Date.now().toString(36)}`;
+  await signUp(page, name);
+  await page.goto("/app/account");
+  const box = page.getByTestId("export-account");
+  await expect(box).toContainText("no guest on their own");
+  await shot(page, info, "account-export");
+  await a11y(page, "account export");
+  // The link is a real download: clicking it starts one for this address. (This machine's Chrome cancels every download it is handed, even a
+  // plain PDF from a trivial server, so the saved file is read with the same session through the request context instead.)
+  const href = (await page.getByTestId("export-link").getAttribute("href"))!;
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByTestId("export-link").click()]);
+  expect(download.url()).toContain(href);
+  const res = await page.request.get(href);
+  expect(res.status()).toBe(200);
+  expect(res.headers()["content-disposition"]).toMatch(/^attachment; filename="nigiwai-export-\d{8}-\d{4}\.zip"$/);
+  const bytes = await res.body();
+  expect(bytes.subarray(0, 2).toString()).toBe("PK"); // a ZIP
+  expect(bytes.length).toBeGreaterThan(500);
+  expect((await sql<{ n: number }>("SELECT count(*)::int AS n FROM audit_log WHERE action = 'account.export' AND tenant_id = (SELECT id FROM tenant WHERE name = $1)", [name])).rows[0]?.n).toBeGreaterThanOrEqual(1);
+  expect(problems.filter((p) => !deliberate.test(p) && !prefetch.test(p))).toEqual([]);
+});

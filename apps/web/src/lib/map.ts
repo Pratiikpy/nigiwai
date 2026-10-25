@@ -63,22 +63,41 @@ export type CrowdMapData = {
   catchment: Catchment[];
   catchment_hidden: { districts: number; guests: number };
   catchment_pending: number;
+  /** Groups for which Grow found no place of their own inside the radius: candidates to check on the ground. Null when there are none. */
+  gaps: GapArea | null;
+  /** Changes the owner logged on Moves, drawn as flags on the timeline. */
+  moves: MapMove[];
   timeline: { unit: "day" | "week"; buckets: { start: string; scans: number }[]; total: number };
   min_group: number;
 };
 
+export type GapArea = {
+  location_id: string;
+  lat: number;
+  lon: number;
+  radius_m: number;
+  groups: { index: number; label: string }[];
+  category: string | null;
+  looked_up: string | null;
+};
+export type MapMove = { id: string; kind: string; title: string; started_on: string; ended_on: string | null };
+
 export type Selection =
+  | { kind: "gap"; id: string }
+  | { kind: "move"; id: string }
   | { kind: "location"; id: string }
   | { kind: "cell"; id: string }
   | { kind: "place"; id: string }
   | null;
 
-export type LayerId = "sites" | "groups" | "catchment" | "around";
-export const LAYERS: { id: LayerId; label: string; icon: "pin" | "people" | "hex" | "search" }[] = [
+export type LayerId = "sites" | "groups" | "catchment" | "around" | "gaps" | "moves";
+export const LAYERS: { id: LayerId; label: string; icon: "pin" | "people" | "hex" | "search" | "alert" | "flag" }[] = [
   { id: "sites", label: "Your sites", icon: "pin" },
   { id: "groups", label: "Groups", icon: "people" },
   { id: "catchment", label: "Catchment", icon: "hex" },
   { id: "around", label: "Around you", icon: "search" },
+  { id: "gaps", label: "Gaps", icon: "alert" },
+  { id: "moves", label: "Moves", icon: "flag" },
 ];
 
 export const GROUP_VARS = ["--t1", "--t2", "--t3"];
