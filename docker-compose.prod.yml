@@ -125,5 +125,24 @@ services:
       api:
         condition: service_healthy
 
+  # Optional TLS in front of the web app: `--profile tls`, with NIGIWAI_SITE_ADDRESS set to the host name guests will open (a name that
+  # points at this machine, for example 203-0-113-7.sslip.io). Caddy gets and renews the certificate itself.
+  caddy:
+    profiles: ["tls"]
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      NIGIWAI_SITE_ADDRESS: ${NIGIWAI_SITE_ADDRESS:?set NIGIWAI_SITE_ADDRESS (the host name, no scheme)}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      web:
+        condition: service_started
+
 volumes:
   pgdata:
+  caddy_data:

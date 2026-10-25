@@ -227,6 +227,9 @@ class OpenAiClient:
                             "name": b["name"],
                             "arguments": json.dumps(b.get("input") or {}),
                         },
+                        # Gemini 3 refuses a conversation whose earlier tool calls lost their thought signature, which it sends as
+                        # `extra_content`; services that send nothing there are unaffected.
+                        **({"extra_content": b["extra_content"]} if b.get("extra_content") else {}),
                     }
                     for b in content
                     if b.get("type") == "tool_use"
@@ -357,7 +360,10 @@ class OpenAiClient:
             call_id = str(raw.get("id") or f"call_{uuid.uuid4().hex[:12]}")
             name = str(function.get("name") or "")
             calls.append(ToolCall(call_id, name, args))
-            blocks.append({"type": "tool_use", "id": call_id, "name": name, "input": args})
+            block: dict[str, Any] = {"type": "tool_use", "id": call_id, "name": name, "input": args}
+            if isinstance(raw.get("extra_content"), dict):
+                block["extra_content"] = raw["extra_content"]
+            blocks.append(block)
         if not words and not calls:
             raise LlmUnavailable("The AI service returned an empty answer.")
         finish = choice.get("finish_reason")

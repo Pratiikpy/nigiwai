@@ -221,6 +221,62 @@ def test_anthropic_style_blocks_become_chat_messages_and_tools_become_functions(
     ]
 
 
+async def test_a_tool_calls_extra_content_comes_back_on_the_next_request() -> None:
+    """Gemini 3 answers a tool call with a thought signature in `extra_content` and refuses (400) a conversation that omits it."""
+    signature = {"google": {"thought_signature": "sig-abc"}}
+    sent: list[dict[str, Any]] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        body = json.loads(request.content)
+        sent.append(body)
+        if len(sent) == 1:
+            return httpx2.Response(
+                200,
+                json=chat(
+                    {
+                        "content": None,
+                        "tool_calls": [
+                            {
+                                "id": "call_9",
+                                "type": "function",
+                                "function": {"name": "answer", "arguments": "{}"},
+                                "extra_content": signature,
+                            }
+                        ],
+                    },
+                    finish="tool_calls",
+                ),
+            )
+        return httpx2.Response(200, json=chat({"content": "done"}))
+
+    c = chat_client(handler)
+    tools = [{"name": "answer", "input_schema": {"type": "object", "properties": {}}}]
+    first = await c.converse("S", [{"role": "user", "content": "go"}], tools)
+    assert first.content[0]["extra_content"] == signature
+    history: list[dict[str, Any]] = [
+        {"role": "user", "content": "go"},
+        {"role": "assistant", "content": first.content},
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "call_9", "content": "{}"}],
+        },
+    ]
+    await c.converse("S", history, tools)
+    echoed = next(m for m in sent[1]["messages"] if m["role"] == "assistant")["tool_calls"][0]
+    assert echoed["extra_content"] == signature
+    # a service that sends nothing there gets nothing extra
+    plain = OpenAiClient.messages_for(
+        "S",
+        [
+            {
+                "role": "assistant",
+                "content": [{"type": "tool_use", "id": "c", "name": "n", "input": {}}],
+            }
+        ],
+    )
+    assert "extra_content" not in plain[1]["tool_calls"][0]
+
+
 async def test_tool_calls_are_read_back_as_blocks_with_their_arguments_parsed() -> None:
     def handler(request: httpx2.Request) -> httpx2.Response:
         body = json.loads(request.content)

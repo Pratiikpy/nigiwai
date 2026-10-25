@@ -58,7 +58,7 @@ A transparent score and an honest evidence page matter more to a skeptical reade
 
 ## What is not done
 
-Said plainly in [BUILD_STATE.md](BUILD_STATE.md): whether real guests' taste forms groups an owner finds useful, and whether the score predicts a crowd's enjoyment, are NOT VERIFIED and cannot be without guests; the language-model features have run on a real model, not on Claude; nothing is emailed; Qloo's images are not shown on the survey; whether Qloo's terms allow its output to be shown publicly in these forms is a question for Qloo ([HUMAN.md](HUMAN.md) H8, H9, H11, H14).
+Said plainly in [BUILD_STATE.md](BUILD_STATE.md): whether real guests' taste forms groups an owner finds useful, and whether the score predicts a crowd's enjoyment, are NOT VERIFIED and cannot be without guests; the language-model features have run on NVIDIA's and Google's hosted models, not on Claude; nothing is emailed; Qloo's images are not shown on the survey; whether Qloo's terms allow its output to be shown publicly in these forms is a question for Qloo ([HUMAN.md](HUMAN.md) H8, H9, H11, H14).
 
 ## Built with
 
