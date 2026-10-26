@@ -132,7 +132,7 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     environment:
-      NIGIWAI_SITE_ADDRESS: ${NIGIWAI_SITE_ADDRESS:?set NIGIWAI_SITE_ADDRESS (the host name, no scheme)}
+      NIGIWAI_SITE_ADDRESS: ${NIGIWAI_SITE_ADDRESS:-localhost}
     ports:
       - "80:80"
       - "443:443"
