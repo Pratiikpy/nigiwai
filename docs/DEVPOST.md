@@ -1,6 +1,6 @@
 # Nigiwai: Devpost entry
 
-Text for the Devpost form, in the order its fields appear. Live app: https://nigiwai.knole.me. Repository: https://github.com/Pratiikpy/nigiwai. Everything below is ready to paste. Every claim has a test, a measurement or an explicit NOT VERIFIED behind it: [QA.md](QA.md) is the matrix, [DECISIONS.md](DECISIONS.md) the reasoning.
+Text for the Devpost form, in the order its fields appear. Live app: https://nigiwai.knole.me. Repository: https://github.com/Pratiikpy/nigiwai. Video (optional field): https://youtu.be/3dFhP7JRtY0. Everything below is ready to paste. Every claim has a test, a measurement or an explicit NOT VERIFIED behind it: [QA.md](QA.md) is the matrix, [DECISIONS.md](DECISIONS.md) the reasoning.
 
 ## Name and tagline
 

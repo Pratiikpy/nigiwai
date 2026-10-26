@@ -2,7 +2,7 @@
 
 **Soundcheck any act on your crowd before you book it.** A music venue's crowd, read from what its guests love (a QR poster on the counter, no account, no name, no email) or, on day one, from the public lineups of its past events. [Qloo](https://qloo.com)'s taste graph then says how well an act fits each group in that crowd, and the score is computed in code, with the working and every Qloo call shown.
 
-**Live: [nigiwai.knole.me](https://nigiwai.knole.me)** · [![CI](https://github.com/Pratiikpy/nigiwai/actions/workflows/ci.yml/badge.svg)](https://github.com/Pratiikpy/nigiwai/actions/workflows/ci.yml) · MIT licence · [Written description for the submission](docs/DEVPOST.md)
+**Live: [nigiwai.knole.me](https://nigiwai.knole.me)** · [![CI](https://github.com/Pratiikpy/nigiwai/actions/workflows/ci.yml/badge.svg)](https://github.com/Pratiikpy/nigiwai/actions/workflows/ci.yml) · MIT licence · [Written description for the submission](docs/DEVPOST.md) · [2-minute video](https://youtu.be/3dFhP7JRtY0)
 
 <p align="center"><img src="docs/screenshots/owner-verdict.png" alt="A Soundcheck: an act scored 94 out of 100 for a crowd, with its range, how each of the crowd's three groups ranks it, why it fits, what to watch out for, and the nights it suits" width="520"></p>
 <p align="center"><sub>A Soundcheck on a made-up room and an invented act (no Qloo data in this picture). The live site does the same for real venues, with the Qloo calls behind each score.</sub></p>
