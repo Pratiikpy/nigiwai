@@ -122,7 +122,7 @@ async def get(engine: AsyncEngine, tenant_id: UUID, business_id: UUID) -> dict[s
         if not venue.atlas_opt_in:
             out["state"] = "not_joined"
             out["reason"] = (
-                "You have not joined. Nothing of yours is shared, and nothing of the Atlas is shown to you."
+                "Nothing of yours is shared, and nothing of the Atlas is shown to you."
             )
             return out
         cx, cy = cell_of(float(home.lat), float(home.lon))
