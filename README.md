@@ -2,7 +2,10 @@
 
 **Soundcheck any act on your crowd before you book it.** A music venue's crowd, read from what its guests love (a QR poster on the counter, no account, no name, no email) or, on day one, from the public lineups of its past events. [Qloo](https://qloo.com)'s taste graph then says how well an act fits each group in that crowd, and the score is computed in code, with the working and every Qloo call shown.
 
-**Live: [nigiwai.knole.me](https://nigiwai.knole.me)** · MIT licence · [Written description for the submission](docs/DEVPOST.md)
+**Live: [nigiwai.knole.me](https://nigiwai.knole.me)** · [![CI](https://github.com/Pratiikpy/nigiwai/actions/workflows/ci.yml/badge.svg)](https://github.com/Pratiikpy/nigiwai/actions/workflows/ci.yml) · MIT licence · [Written description for the submission](docs/DEVPOST.md)
+
+<p align="center"><img src="docs/screenshots/owner-verdict.png" alt="A Soundcheck: an act scored 94 out of 100 for a crowd, with its range, how each of the crowd's three groups ranks it, why it fits, what to watch out for, and the nights it suits" width="520"></p>
+<p align="center"><sub>A Soundcheck on a made-up room and an invented act (no Qloo data in this picture). The live site does the same for real venues, with the Qloo calls behind each score.</sub></p>
 
 ## Try it in a minute, with no account
 
@@ -20,6 +23,24 @@ Qloo asked for "the thing that only works because it knows what people love", no
 - **A decision, with reasons.** Fit, range, per-group ranks, what to watch, when to play it. The formula and weights are printed on the page (`v0`, a starting design that is **not calibrated**, and says so).
 - **Judgment about a real choice.** Who to book, when to play whom, who is missing from the room, where a similar room might open: each answer says how it was worked out and labels every number *measured*, *observed* or *modelled*.
 - **Privacy-first, like Qloo.** Guests give picks, never identity. Nothing that names a person is sent to Qloo, nothing is shown about a group of fewer than ten, and every table is row-level-secured. "Knowing what someone may like should not require knowing who they are."
+
+### How it works
+
+```mermaid
+flowchart LR
+  G["Guests: a QR survey<br/>picks only, no identity"] --> C
+  L["Public lineups (MusicBrainz)<br/>for a room with no guests yet"] --> C
+  C["The crowd: soft groups,<br/>shown only at 10 or more"] --> Q
+  subgraph Q["Qloo Guard: typed, cached, budgeted, traced"]
+    direction TB
+    S["/search"]
+    I["/v2/insights"]
+    E["/entities"]
+  end
+  Q --> F["Fit score, computed in code<br/>formula and weights shown"]
+  F --> O["Owner: Soundcheck, Sound plan,<br/>Booking Brief, Today, crowd map"]
+  F --> A["Qloo against an AI alone,<br/>side by side"]
+```
 
 ### Where Qloo is used
 
@@ -47,6 +68,17 @@ We ran fifteen preregistered tests against an LLM alone and against free-data ag
 | **Design:** a complete, coherent product? | A guest on a phone (consent, picker, Taste Card), an owner on a desktop (crowd map, groups, Soundcheck, Sound plan, Booking Brief, Today), and the public pages, in light and dark, with accessibility checks and zero console errors. See the [screenshots](#screenshots). |
 | **Potential impact:** a real problem, a real audience, shown working? | A venue booker who decides from gut feel or a pitch. The product shows a real crowd, a checked act and a one-page Booking Brief to forward. [Business case](https://nigiwai.knole.me/business). Real users are **not yet verified**; see the limits. |
 | **Quality of the idea:** creative, non-obvious use of Qloo, real understanding? | Using Qloo to rank an act among a crowd's own favourites, per group, instead of asking it for "more like this". A public-lineup start so a room with no guests yet still gets a crowd. |
+
+## Who pays, and why
+
+A music venue's booker or owner decides who to book from gut feel, an act's record elsewhere or a pitch, and none of that says whether the act fits the people who fill *this* room. The first customer is an independent live-music venue or a bar that books acts; the same flow serves restaurants, breweries, hotel bars, festivals and promoters, and the Sound plan reaches any room with a speaker. A subscription per venue is the hypothesis; the price is untested and none is shown (the [business case page](https://nigiwai.knole.me/business) says so). Nigiwai does not resell Qloo output, which Qloo's terms forbid: what an owner pays for is the crowd, the decision and the brief.
+
+## For judges: how to test it
+
+- **No account, 1 minute:** [/try](https://nigiwai.knole.me/try), as above. Search for any other music venue and it is built in the background from its public lineups (a few minutes, a handful per day for the whole site).
+- **As an owner, 2 minutes:** [/signup](https://nigiwai.knole.me/signup) (a venue name, an email, a password; you get a recovery code once), describe the venue, publish the survey and open its QR link `/s/<token>`; answer it in another tab as a guest and watch the scan arrive on the overview. Groups need guests (60 for a provisional view), so for a full crowd look at the three demo venues. Delete the account any time from `/app/account`; everything of it goes.
+- **As a guest, 1 minute:** the survey link above: pick three to five things you love, answer nothing else, and get your Taste Card.
+- **Run it yourself:** the steps below (`just setup`, `just up`, `just migrate`, `just demo`); a clean clone of the repository passed every stage, recorded in [docs/QA.md](docs/QA.md).
 
 ## Honest limits
 

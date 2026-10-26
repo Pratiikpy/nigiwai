@@ -66,6 +66,13 @@ test("owner workspace and public pages, on a desktop", async ({ page, request },
   await heading("Soundcheck");
   await expect(page.getByRole("group", { name: "Suggested acts" }).getByRole("button").first()).toBeVisible({ timeout: 30_000 });
   await snap(page, "owner-soundcheck");
+  // a stored verdict: the score, its range, each group's rank and the working
+  await page.getByRole("region", { name: "Recent Soundchecks" }).getByRole("button", { name: /Juniper Hours and the Slow Tide/ }).click();
+  await expect(page.getByTestId("verdict")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("score")).toBeVisible();
+  await page.waitForTimeout(700);
+  // the card alone: the AI-alone panel beside it asks a live service about an invented act, so it is left out of the picture
+  await page.getByTestId("verdict").screenshot({ path: `${OUT}/owner-verdict.png` });
 
   await page.goto("/app/sound");
   await heading("Sound plan");
