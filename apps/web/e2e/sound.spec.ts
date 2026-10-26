@@ -84,6 +84,15 @@ test("sound plan: each stretch of the week names its own acts, says how busy it 
   await expect(afternoon.getByTestId("act")).toHaveCount(0);
   await expect(page.locator('[data-key="weekdays-morning"]')).toHaveAttribute("data-status", "closed");
   await expect(page.locator('[data-key="weekdays-morning"]')).toContainText("You are not open in this stretch");
+  // PRD M18: the Don't-do list is there, closed, and calls itself an untested idea once opened
+  const dd = page.getByTestId("dont-do");
+  await expect(dd).toBeVisible();
+  await expect(dd).toContainText("idea only");
+  await dd.locator("summary").click();
+  await expect(page.getByTestId("dont-do-note")).toContainText("Idea only");
+  await expect(page.getByTestId("dont-do-note")).toContainText("has not been tested");
+  // whatever the planted ranks produce, the list says something: names, or that there are none, or why it is withheld
+  await expect(dd.locator('[data-testid="leave-off"], [data-testid="leave-off-none"], [data-testid="dont-do-withheld"]')).toHaveCount(1);
   await shot(page, info, "sound-plan");
   await a11y(page, "sound plan");
   await setTheme(page, "dark");

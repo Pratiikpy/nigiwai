@@ -412,6 +412,10 @@ fieldset.card > legend + * { clear: both; }
 .snd-acts__s { font-size: var(--t-lg); }
 .snd-acts__watch { font-size: var(--t-sm); color: var(--warn); font-weight: var(--strong-weight); }
 .snd-notes { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); max-width: 70ch; }
+.snd-sub { font-size: var(--t-sm, 1rem); margin: var(--s-3) 0 var(--s-1); }
+.snd-dd { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-3); max-width: 70ch; }
+.snd-dd li { display: grid; gap: 2px; }
+.snd-dd li > .meta { overflow-wrap: anywhere; }
 @media print { .shell__side, .shell__top, button { display: none !important; } .card { box-shadow: none !important; break-inside: avoid; } }
 
 /* ---------- Moves (M11, M20): what changed, and what the scans in the same slot did ---------- */

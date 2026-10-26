@@ -44,7 +44,6 @@ test("a demo venue opens from stored results and a suggested act gets a verdict 
 });
 
 test("an owner signs up, publishes a survey, a guest answers it on a phone, the owner reads it, then deletes the account", async ({
-  page,
   request,
   browser,
 }) => {

@@ -169,3 +169,62 @@ def test_an_act_that_ranks_poorly_for_a_big_part_of_a_stretch_is_flagged_and_one
     # the same flag on the one list a lineup-only room gets
     flagged = sm.undated_plan([(0, "Folk scene", 0.6), (1, "Dance scene", 0.4)], [split])
     assert flagged["acts"][0]["watch"] == {"label": "Dance scene", "share": 0.4, "rank": 0.1}
+
+
+# ------------------------------------------------------------------------------------------------- M18, Don't-do list
+BIG = [(0, "Quiet crowd", 0.6), (1, "Dance crowd", 0.3), (2, "Jazz crowd", 0.1)]
+POOL = [
+    act("Quiet Fields", g0=0.95, g1=0.5, g2=0.4),
+    act("Soft Rain", g0=0.9, g1=0.6, g2=0.5),
+    act("Neon Feast", g0=0.1, g1=0.9, g2=0.3),  # the big group ranks it low
+    act("Hard Floor", g0=0.15, g1=0.95, g2=0.2),
+    act("Middle Road", g0=0.6, g1=0.6, g2=0.6),
+    act(
+        "Late Brass", g0=0.5, g1=0.5, g2=0.9
+    ),  # reaches toward the small jazz group, not off-putting to the big one
+    act("Plain Pop", g0=0.7, g1=0.7, g2=0.7),
+]
+
+
+def test_the_dont_do_list_is_what_the_main_groups_rank_lowest_and_is_always_called_an_idea() -> (
+    None
+):
+    got = sm.dont_do(BIG, POOL)
+    assert got["state"] == "idea_only" and got["label"] == "modelled" and got["idea_only"] is True
+    assert "Idea only" in got["note"] and "has not been tested" in got["note"]
+    assert got["main_groups"] == [
+        "Quiet crowd",
+        "Dance crowd",
+    ]  # 60% and 30% of the crowd; the 10% group is not main
+    names = [a["name"] for a in got["leave_off"]]
+    assert names == [
+        "Neon Feast",
+        "Hard Floor",
+    ]  # both put off the 60% group; the lower rank comes first
+    first = got["leave_off"][0]
+    assert first["group"] == "Quiet crowd" and first["group_rank"] == 0.1
+    assert "out of 100" in first["reason"] and "60% of your crowd" in first["reason"]
+    assert all(
+        a["group_rank"] < 0.35 for a in got["leave_off"]
+    )  # below the Fit Verdict's own weak line
+
+
+def test_a_stretch_pick_reaches_a_smaller_group_without_alienating_the_main_ones() -> None:
+    got = sm.dont_do(BIG, POOL)
+    assert [a["name"] for a in got["stretch"]] == ["Late Brass"]
+    pick = got["stretch"][0]
+    assert pick["toward"] == "Jazz crowd" and pick["toward_rank"] == 0.9
+    assert pick["main_fit"] >= sm.STRETCH_MAIN_FLOOR
+    # an act the main groups rank low is never a stretch, however well it ranks for a small group
+    assert "Neon Feast" not in [a["name"] for a in got["stretch"]]
+
+
+def test_the_dont_do_list_is_the_same_every_time_and_says_nothing_without_a_low_end() -> None:
+    assert sm.dont_do(BIG, POOL) == sm.dont_do(BIG, list(reversed(POOL)))
+    few = sm.dont_do(BIG, POOL[:3])
+    assert few["state"] == "withheld" and few["leave_off"] == [] and "at least 6" in few["reason"]
+    one = sm.dont_do([(0, "Only", 1.0)], POOL)
+    assert one["state"] == "withheld" and "fewer than two groups" in one["reason"]
+    # acts scored for too little of the crowd are not read at all
+    thin = [act(f"Act {n}", g2=0.1) for n in range(8)]
+    assert sm.dont_do(BIG, thin)["state"] == "withheld"

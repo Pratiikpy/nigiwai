@@ -252,3 +252,121 @@ def undated_plan(
             for value, act, shares in ranked[:top]
         ],
     }
+
+
+# ---------------------------------------------------------------------------------------------------------------- M18
+# The Don't-do list and stretch picks (PRD M18). Built only from the per-group ranks Qloo's answers already gave the acts the
+# last suggestion run scored: no new Qloo call, no model. The PRD says to release it only after a held-out test, and there is
+# none (nobody has told us which acts a crowd dislikes), so it is always labelled an idea and modelled, never advice.
+MAIN_SHARE = 0.25  # a group with at least this share of the crowd is one of its main groups
+STRETCH_FIT = 0.75  # an act this high for a smaller group is a stretch toward it...
+STRETCH_MAIN_FLOOR = 0.4  # ...as long as it does not rank below this for the main groups
+DONT_DO_MIN_ACTS = 6  # fewer scored acts than this and there is no "low end" to speak of
+DONT_DO_TOP = 3
+DONT_DO_NOTE = (
+    "Idea only. This is read from the low end of Qloo's rankings, and how well that end predicts what a crowd dislikes has not been "
+    "tested (nobody has told us which acts a crowd dislikes). It is modelled from your groups' picks. Use it to ask a question, "
+    "not to rule an act out."
+)
+
+
+def _withheld(reason: str) -> dict[str, Any]:
+    return {
+        "state": "withheld",
+        "label": "modelled",
+        "idea_only": True,
+        "reason": reason,
+        "note": DONT_DO_NOTE,
+        "leave_off": [],
+        "stretch": [],
+    }
+
+
+def dont_do(
+    groups: list[tuple[int, str, float]], acts: list[SoundAct], *, top: int = DONT_DO_TOP
+) -> dict[str, Any]:
+    """Acts the crowd's main groups rank poorly (what to leave off) and acts that reach toward a smaller group without
+    alienating the main ones (stretch picks). `groups` is (index, label, share). Said plainly as an untested idea."""
+    share = {i: s for i, _, s in groups if s > 0}
+    label_of = {i: label for i, label, _ in groups}
+    total = sum(share.values())
+    if len(share) < 2 or total <= 0:
+        return _withheld(
+            "There are fewer than two groups, so there is no main crowd and no neighbouring one to compare."
+        )
+    main = [i for i, s in share.items() if s / total >= MAIN_SHARE] or [
+        max(share, key=lambda i: (share[i], -i))
+    ]
+    leave: list[tuple[float, float, SoundAct, int, float]] = []
+    stretch: list[tuple[float, SoundAct, int, float]] = []
+    considered = 0
+    for act in acts:
+        scored = {i: act.fits[i] for i in share if i in act.fits}
+        if sum(share[i] for i in scored) / total < MIN_SCORED_SHARE:
+            continue
+        main_scored = [i for i in main if i in scored]
+        if not main_scored:
+            continue
+        considered += 1
+        weight = sum(share[i] for i in main_scored)
+        main_fit = sum(share[i] * scored[i] for i in main_scored) / weight
+        worst = min(main_scored, key=lambda i: (scored[i], -share[i], i))
+        if (
+            scored[worst] < WEIGHTS.weak
+        ):  # a main group ranks it below the Fit Verdict's own weak line
+            leave.append((share[worst] / total, scored[worst], act, worst, main_fit))
+            continue
+        neighbours = [i for i in scored if i not in main]
+        if neighbours and main_fit >= STRETCH_MAIN_FLOOR:
+            toward = max(neighbours, key=lambda i: (scored[i], -i))
+            if scored[toward] >= STRETCH_FIT:
+                stretch.append((scored[toward], act, toward, main_fit))
+    if considered < DONT_DO_MIN_ACTS:
+        return _withheld(
+            f"Only {considered} acts were scored for your main groups; at least {DONT_DO_MIN_ACTS} are needed before there is a low end to read."
+        )
+    leave.sort(
+        key=lambda r: (-r[0], r[1], r[2].name, r[2].entity_id)
+    )  # the biggest group put off first, then the lowest rank
+    stretch.sort(key=lambda r: (-r[0], r[1].name, r[1].entity_id))
+    return {
+        "state": "idea_only",
+        "label": "modelled",
+        "idea_only": True,
+        "reason": None,
+        "note": DONT_DO_NOTE,
+        "acts_considered": considered,
+        "main_groups": [label_of[i] for i in sorted(main)],
+        "leave_off": [
+            {
+                "entity_id": act.entity_id,
+                "name": act.name,
+                "genres": list(act.genres[:3]),
+                "main_fit": round(main_fit, 2),
+                "group": label_of[worst],
+                "group_share": round(share[worst] / total, 2),
+                "group_rank": round(rank, 2),
+                "reason": (
+                    f"Ranks {round(rank * 100)} out of 100 among the acts your crowd picks, for {label_of[worst]} "
+                    f"({round(share[worst] / total * 100)}% of your crowd)."
+                ),
+            }
+            for _, rank, act, worst, main_fit in leave[:top]
+        ],
+        "stretch": [
+            {
+                "entity_id": act.entity_id,
+                "name": act.name,
+                "genres": list(act.genres[:3]),
+                "main_fit": round(main_fit, 2),
+                "toward": label_of[toward],
+                "toward_share": round(share[toward] / total, 2),
+                "toward_rank": round(rank, 2),
+                "reason": (
+                    f"Ranks {round(rank * 100)} out of 100 for {label_of[toward]} ({round(share[toward] / total * 100)}% of your crowd) "
+                    f"and {round(main_fit * 100)} for your main groups, so it reaches toward them without turning the rest away."
+                ),
+            }
+            for rank, act, toward, main_fit in stretch[:top]
+        ],
+    }

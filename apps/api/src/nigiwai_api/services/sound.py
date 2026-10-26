@@ -90,6 +90,8 @@ async def build(engine: AsyncEngine, tenant_id: UUID, business_id: UUID) -> dict
         "business_type": biz.type,
         "acts_updated_at": pool["updated_at"],
         "notes": list(NOTES),
+        # PRD M18: read from the same stored per-group ranks, no new Qloo call; always labelled an untested idea
+        "dont_do": sm.dont_do([(g.index, g.label, g.share) for g in basis.groups], acts),
     }
     if basis.kind == "lineup":
         base["kind"] = "undated"

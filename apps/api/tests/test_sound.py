@@ -202,3 +202,30 @@ async def test_another_account_cannot_read_a_venues_plan(
         f"/v1/tenants/{owner.tenant_id}/businesses/{venue.business_id}/sound"
     )
     assert anonymous.status_code == 401
+
+
+async def test_the_plan_carries_a_dont_do_list_that_is_an_idea_and_costs_no_qloo_call(
+    world: World, admin: psycopg.Connection[Any]
+) -> None:
+    owner = await sign_up(world)
+    venue = await make_venue(owner)
+    admin.execute("UPDATE location SET hours = %s::jsonb", (ALL_WEEK,))
+    await timed_crowd(world, admin, owner, venue)
+    await build_acts(world, admin, owner, venue)
+    calls_before = len(world.qloo.calls)
+
+    doc = await plan(owner, venue)
+    dd = doc["dont_do"]
+    assert dd["state"] == "idea_only" and dd["idea_only"] is True and dd["label"] == "modelled"
+    assert "Idea only" in dd["note"] and "has not been tested" in dd["note"]
+    assert dd["acts_considered"] >= 9
+    # three planted groups of a third each are all main groups; what the scripted Qloo ranks below the weak line, if anything, is listed
+    assert dd["main_groups"] == ["Group A", "Group B", "Group C"]
+    assert len(dd["leave_off"]) <= 3 and len(dd["stretch"]) <= 3
+    for a in dd["leave_off"]:
+        assert a["group_rank"] < 0.35 and "out of 100" in a["reason"]
+    for a in dd["stretch"]:
+        assert a["toward_rank"] >= 0.75 and a["main_fit"] >= 0.4
+    assert len(world.qloo.calls) == calls_before  # read from what is stored
+    # the same stored data gives the same list
+    assert (await plan(owner, venue))["dont_do"] == dd

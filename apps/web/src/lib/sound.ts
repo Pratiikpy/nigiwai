@@ -26,6 +26,19 @@ export type SoundCell = {
   acts: SoundAct[];
 };
 
+/** PRD M18: acts a main group ranks poorly, and acts that reach toward a smaller group. Always an untested idea, always modelled. */
+export type DontDo = {
+  state: "idea_only" | "withheld";
+  label: "modelled";
+  idea_only: true;
+  reason: string | null;
+  note: string;
+  acts_considered?: number;
+  main_groups?: string[];
+  leave_off: { entity_id: string; name: string; genres: string[]; main_fit: number; group: string; group_share: number; group_rank: number; reason: string }[];
+  stretch: { entity_id: string; name: string; genres: string[]; main_fit: number; toward: string; toward_share: number; toward_rank: number; reason: string }[];
+};
+
 export type SoundPlan = {
   state: "ready" | "no_crowd" | "needs_acts" | "stale";
   reason: string | null;
@@ -34,6 +47,7 @@ export type SoundPlan = {
   has_hours?: boolean;
   basis?: { kind: "guests" | "lineup"; label: string; provisional: boolean };
   business_type?: string;
+  dont_do?: DontDo;
   acts_updated_at?: string;
   notes: string[];
   plan: null | {

@@ -5,7 +5,7 @@ import { Icon } from "@/components/Icon";
 import { Label } from "@/components/Label";
 import { Loading, Notice, PageHead } from "@/components/owner/ui";
 import { ApiError, api } from "@/lib/api";
-import { type SoundAct, type SoundCell, type SoundPlan, planText } from "@/lib/sound";
+import { type DontDo, type SoundAct, type SoundCell, type SoundPlan, planText } from "@/lib/sound";
 import type { Suggestions } from "@/lib/soundcheck";
 
 function Acts({ acts, empty, link }: { acts: SoundAct[]; empty: string; link: string }) {
@@ -72,6 +72,65 @@ function Cell({ cell, link }: { cell: SoundCell; link: string }) {
         <p className="meta snd-cell__why">{cell.reason}</p>
       )}
     </article>
+  );
+}
+
+/** PRD M18, shown as what it is: an idea, modelled from the low end of Qloo's rankings, which has not been tested. */
+function DontDoPanel({ doc, link }: { doc: DontDo; link: string }) {
+  return (
+    <details className="disc" data-testid="dont-do" data-state={doc.state}>
+      <summary>
+        <Icon name="chev-r" />
+        Acts to leave off, and stretch picks <Label kind="modelled" /> <span className="meta">idea only</span>
+      </summary>
+      <div className="disc__body stack">
+        <p className="meta" data-testid="dont-do-note">
+          {doc.note}
+        </p>
+        {doc.state === "withheld" ? (
+          <p data-testid="dont-do-withheld">{doc.reason}</p>
+        ) : (
+          <>
+            <h3 className="snd-sub">Your main groups rank these poorly</h3>
+            {doc.leave_off.length ? (
+              <ul className="snd-dd" data-testid="leave-off">
+                {doc.leave_off.map((a) => (
+                  <li key={a.entity_id}>
+                    <a href={`${link}?q=${encodeURIComponent(a.name)}`}>{a.name}</a>
+                    <span className="meta">
+                      {a.genres.length ? `${a.genres.join(", ")} · ` : ""}
+                      {a.reason}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="meta" data-testid="leave-off-none">
+                None of the {doc.acts_considered} acts scored is ranked below the weak line by one of your main groups ({(doc.main_groups ?? []).join(", ")}).
+              </p>
+            )}
+            <h3 className="snd-sub">Stretch picks</h3>
+            {doc.stretch.length ? (
+              <ul className="snd-dd" data-testid="stretch">
+                {doc.stretch.map((a) => (
+                  <li key={a.entity_id}>
+                    <a href={`${link}?q=${encodeURIComponent(a.name)}`}>{a.name}</a>
+                    <span className="meta">
+                      {a.genres.length ? `${a.genres.join(", ")} · ` : ""}
+                      {a.reason}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="meta" data-testid="stretch-none">
+                No scored act reaches toward a smaller group while staying comfortable for your main ones.
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </details>
   );
 }
 
@@ -204,6 +263,7 @@ export function SoundWorkspace({ base, canWrite, soundcheckLink = "/app/soundche
               </button>
             ) : null}
           </div>
+          {doc.dont_do ? <DontDoPanel doc={doc.dont_do} link={soundcheckLink} /> : null}
           <details className="disc">
             <summary>
               <Icon name="chev-r" />
