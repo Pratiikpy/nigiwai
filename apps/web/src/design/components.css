@@ -242,6 +242,14 @@
 /* A row of tabs wider than the screen scrolls inside itself; it never widens the page. */
 .tabs--scroll { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
 .tabs--scroll .tab { flex: none; white-space: nowrap; }
+/* A soft edge on the side that has more tabs, so a clipped label reads as scrollable. It goes when that end is reached. */
+.tabs--scroll {
+  background:
+    linear-gradient(var(--bg), var(--bg)) left center / 14px 100% no-repeat local,
+    linear-gradient(var(--bg), var(--bg)) right center / 14px 100% no-repeat local,
+    linear-gradient(to right, var(--rule), transparent) left center / 14px 100% no-repeat scroll,
+    linear-gradient(to left, var(--rule), transparent) right center / 14px 100% no-repeat scroll;
+}
 
 /* ---------- Bottom sheet / dialog ---------- */
 .scrim { position: absolute; inset: 0; background: var(--overlay); z-index: 40; opacity: 0; pointer-events: none; transition: opacity var(--dur-3) var(--ease-std); }

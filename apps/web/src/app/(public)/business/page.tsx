@@ -12,11 +12,11 @@ const RINGS = [
   { n: "1", who: "Independent live-music venues and bars that book acts.", size: "About 3,000 independent venues were reported in 2021 (Pollstar); old, and venues only." },
   { n: "2", who: "Restaurants, breweries, hotel bars, festivals and promoters that book acts.", size: "The same flow, no new feature." },
   {
-    n: "2b",
+    n: "3",
     who: "Every room with a speaker: the Sound plan.",
     size: "More than 1 million US restaurant locations (National Restaurant Association, 2025); about 70,000 US bars and nightclubs (IBISWorld, 2026).",
   },
-  { n: "3", who: "Artists and managers choosing rooms; brands booking talent.", size: "Later. Needs venue data and a commercial agreement with Qloo." },
+  { n: "4", who: "Artists and managers choosing rooms; brands booking talent.", size: "Later. Needs venue data and a commercial agreement with Qloo." },
 ];
 
 export default function BusinessPage() {

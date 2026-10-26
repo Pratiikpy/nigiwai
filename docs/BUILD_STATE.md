@@ -83,6 +83,13 @@ Nigiwai (賑わい): a crowd-reading tool for venues; hero flow Soundcheck. Spec
 - **Looked at.** Screenshots of the interview (question, places, hours, refused answer, check, saved, assistant, fallback), the plan page, Sound plan, Moves, Drafts in light and dark on desktop and phone profiles; axe clean and zero console errors in each state the specs reach.
 - **Bugs found by these tests and fixed (not exhaustive):** the hours editor on Your venue had no styling at all (found while looking at the onboarding screens, now one shared component); the side menu marked "Soundcheck" and "Sound plan" both current because one name starts with the other; the conversation log was a scrollable region a keyboard could not reach; the interview's "what I understood" list was an invalid definition list; Moves and Drafts bodies failed on ISO dates under strict validation; the poster test's QR reader (OpenCV's older detector) missed about one A4 poster in eight while the code was fine (60 of 60 read with the newer detector), so the test now uses that; a stale form error stayed on screen after the field was fixed.
 
+## Audit and polish pass (2026-10-26)
+
+- **Covered:** every public page on the live site, phone and desktop, light and dark (40 screenshots, no horizontal overflow, one expected 404 console line from the not-found page), plus the owner pages through the browser suite.
+- **Changed:** the front page now shows a Soundcheck in the first screen and links the film; footer, waitlist consent (`waitlist-v2`), password hint, Proof heading ("Items Qloo did not return"), a glossary on Evidence, audiences numbered 1 to 4, a scroll edge on the venue tab strip on phones.
+- **Evidence:** browser suite 158 passed, 32 skipped (gated live and showcase specs) in 25.9 minutes; the production smoke test passed 3 of 3 against https://nigiwai.knole.me before the last two cosmetic changes.
+- **Not covered:** a fresh screenshot review of every owner page in dark mode on a phone, and the guest flow on the live site after this pass (the smoke test drives it once).
+
 ## Open items and limits
 - **NOT VERIFIED: speed with real people.** The PRD target (a real phone, median 20 s, five phones) cannot be measured here. The scripted run completes in a few seconds, which says nothing about people. Copy says no time claim.
 - **NOT VERIFIED: the 429 onset and concurrent scanners.** No load test against live Qloo has been run; the Guard keeps to 8 requests per second by design and the picker is capped at 20 live searches per sitting.
