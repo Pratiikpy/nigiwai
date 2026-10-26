@@ -1,0 +1,4 @@
+:8088 {
+	header +Cache-Control no-transform
+	reverse_proxy web:3000
+}

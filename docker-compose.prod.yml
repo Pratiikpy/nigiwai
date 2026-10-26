@@ -143,6 +143,20 @@ services:
       web:
         condition: service_started
 
+  # For a Cloudflare tunnel: `--profile tunnel`, with the tunnel pointed at http://localhost:3101. It adds `Cache-Control: no-transform`, which
+  # tells Cloudflare not to rewrite the pages (it would inject its analytics script, which this site's own CSP blocks).
+  edge:
+    profiles: ["tunnel"]
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3101:8088"
+    volumes:
+      - ./infra/caddy/Caddyfile.tunnel:/etc/caddy/Caddyfile:ro
+    depends_on:
+      web:
+        condition: service_started
+
 volumes:
   pgdata:
   caddy_data:
