@@ -182,3 +182,12 @@
 @media (max-width: 560px) {
   .hero__figure img { width: calc(100% - 8px); box-shadow: 6px 6px 0 var(--brand); }
 }
+
+/* On a phone the acts table reads as one block per act; printing keeps the table. */
+@media screen and (max-width: 560px) {
+  .paper table.brief-acts thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+  .paper table.brief-acts, .paper table.brief-acts tbody, .paper table.brief-acts tr, .paper table.brief-acts td { display: block; }
+  .paper table.brief-acts tr { padding: 10px 0; border-bottom: 1px solid #d8ccb3; }
+  .paper table.brief-acts td { border: 0; padding: 3px 0; text-align: left; }
+  .paper table.brief-acts td[data-label]::before { content: attr(data-label) ": "; font-weight: 650; }
+}

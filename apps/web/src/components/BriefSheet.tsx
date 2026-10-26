@@ -62,7 +62,7 @@ export function BriefSheet({ doc }: { doc: Brief }) {
       </section>
       <section>
         <h2>{doc.acts.length === 3 ? "Three acts to consider" : "Acts to consider"}</h2>
-        <table>
+        <table className="brief-acts">
           <thead>
             <tr>
               <th>Act</th>
@@ -85,15 +85,15 @@ export function BriefSheet({ doc }: { doc: Brief }) {
                   <br />
                   <small>Fit by group: {a.groups.map((g) => `${g.label} ${g.fit}`).join(" · ")}</small>
                 </td>
-                <td className="num">
+                <td className="num" data-label="Soundcheck">
                   {a.score}
                   <br />
                   <small>
                     range {a.band[0]} to {a.band[1]}
                   </small>
                 </td>
-                <td>{a.best_for}</td>
-                <td>{a.watch ?? "Nothing stands out."}</td>
+                <td data-label="Best for">{a.best_for}</td>
+                <td data-label="Watch out for">{a.watch ?? "Nothing stands out."}</td>
               </tr>
             ))}
           </tbody>
