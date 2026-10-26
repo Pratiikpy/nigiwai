@@ -349,7 +349,7 @@ export function GrowWorkspace({ base, canWrite, soundcheckLink = "/app/soundchec
       ) : null}
 
       <ul className="snd-notes" data-testid="notes">
-        <li className="meta">Nothing on this page is a count of customers. Ghost customers are tastes Qloo finds next to yours; places are what Qloo lists, checked for the closure flag and for the area.</li>
+        <li className="meta">Nothing on this page is a count of customers. “Who else might come” is tastes Qloo finds next to your groups’; places are what Qloo lists, checked for the closure flag and for the area.</li>
         <li className="meta">Where Qloo’s answer did not change with your crowd’s taste, or gave every group the same places, this page says so and does not claim a match.</li>
         <li className="meta">Whether acting on any of this brings people in is not measured. Log what you try on Moves and compare the scans.</li>
       </ul>

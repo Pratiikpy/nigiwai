@@ -542,7 +542,7 @@ async def get(engine: AsyncEngine, tenant_id: UUID, business_id: UUID) -> dict[s
         return out
     if row is None:
         out["state"] = "not_run"
-        out["reason"] = "Nothing has been looked up yet."
+        out["reason"] = "Nothing has been looked up yet. A look-up finds tastes that sit next to your groups' and the places that serve them."
         return out
     out["updated_at"] = row.updated_at.isoformat()
     out["error"] = row.error
