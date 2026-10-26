@@ -54,6 +54,8 @@ A guest, on a phone: scan, search, pick, and a Taste Card.
 
 And the public pages: the front door, Try a venue (with the search for any venue), the evidence including where Qloo lost, the privacy page and the business case. [All screenshots](docs/screenshots).
 
+**Live:** https://nigiwai.knole.me. Open it, choose a demo venue and check an act; no account is needed.
+
 ## Run it locally
 
 You need Docker, [uv](https://docs.astral.sh/uv/), Node 22.19 or newer with pnpm, and [just](https://github.com/casey/just).
