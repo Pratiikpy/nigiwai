@@ -1,10 +1,59 @@
 # Nigiwai
 
-Read a room's crowd. Venues put a QR poster on the counter; guests say what they love in about a minute, with no account and no personal details; the owner sees who their crowd is. Taste data comes from [Qloo](https://qloo.com), always through one guarded path.
+**Soundcheck any act on your crowd before you book it.** A music venue's crowd, read from what its guests love (a QR poster on the counter, no account, no name, no email) or, on day one, from the public lineups of its past events. [Qloo](https://qloo.com)'s taste graph then says how well an act fits each group in that crowd, and the score is computed in code, with the working and every Qloo call shown.
 
-Status: work in progress. [docs/BUILD_STATE.md](docs/BUILD_STATE.md) says exactly what is built, what is tested and how, and what is open.
+**Live: [nigiwai.knole.me](https://nigiwai.knole.me)** · MIT licence · [Written description for the submission](docs/DEVPOST.md)
 
-## What works today
+## Try it in a minute, with no account
+
+1. Open **[nigiwai.knole.me/try](https://nigiwai.knole.me/try)** and choose a venue: Mercury Lounge (New York), The Hideout or Empty Bottle (Chicago). Each is a real room, read from the public lineups of its past events and matched to Qloo.
+2. Pick one of the suggested acts, or search any artist. You get a 0 to 100 fit, the likely range, how the act ranks for each group of the crowd, what to watch for, and the nights it suits.
+3. Open **"The Qloo calls behind this score"**: what was sent, what Qloo answered, and whether it came from cache.
+4. Open **"Qloo against an AI alone"** to see the same question put to a language model with no tools, beside Qloo's answer.
+5. Or be the guest: scan a poster's link (`/s/<token>`), pick five things you love, and get a Taste Card.
+
+## Why this only works because of Qloo
+
+Qloo asked for "the thing that only works because it knows what people love", not a demo of what a language model already does. Nigiwai is built to be checked against that:
+
+- **The score is Qloo's, not a model's.** For each group of a crowd, one `/v2/insights` call carries the group's favourites as the signal and the candidate act plus up to twenty reference acts as the filter. The answer ranks the act among acts that same group picks. A model can name acts similar to a famous one; it cannot say how a particular crowd's favourites relate to an obscure act it has never seen.
+- **A decision, with reasons.** Fit, range, per-group ranks, what to watch, when to play it. The formula and weights are printed on the page (`v0`, a starting design that is **not calibrated**, and says so).
+- **Judgment about a real choice.** Who to book, when to play whom, who is missing from the room, where a similar room might open: each answer says how it was worked out and labels every number *measured*, *observed* or *modelled*.
+- **Privacy-first, like Qloo.** Guests give picks, never identity. Nothing that names a person is sent to Qloo, nothing is shown about a group of fewer than ten, and every table is row-level-secured. "Knowing what someone may like should not require knowing who they are."
+
+### Where Qloo is used
+
+| Job | Qloo call | Why Qloo |
+|---|---|---|
+| Find the act or place a guest or owner means | `/search` (artist or place; places biased to the room's position) | A real entity with an id and tags, not a string |
+| Match a venue's past performers | `/search`, accepted only on an exact normalised name or MusicBrainz id | A miss is dropped, never guessed |
+| Fit of one act to one group | `/v2/insights` artist, `signal.interests.entities` plus `filter.results.entities` | One call ranks the act among reference acts the same group actually picks |
+| Suggested acts and the Wildcard | `/v2/insights` artist, per group | Neighbours of what each group loves, then scored the same way |
+| Qloo against an AI alone | `/v2/insights` neighbours, `/search` exact name for every act the model names | Shows which acts exist and where the two lists agree, without ranking either side |
+| Who a group is | `/v2/insights`, `filter.type=urn:demographics` | Coarse age and gender lean, labelled Modelled |
+| What is around | `/v2/insights`, place type, a location and radius | Places inside an exact radius |
+
+Every call goes through one guarded path ([`packages/qloo-guard`](packages/qloo-guard)): typed requests, rule checks learned from our own tests, a private cache, a rate limiter, a monthly budget by purpose, and a trace the owner can open. The harness (`@qloo/qloo-harness`) is the default transport.
+
+### What the evidence says, including where Qloo lost
+
+We ran fifteen preregistered tests against an LLM alone and against free-data agents, and published them on the [Evidence page](https://nigiwai.knole.me/evidence): five won, four tied, five lost, one open. Qloo did **not** beat a language model at open-ended recommendation, and its affinity ranked consensus items at chance. Where it measurably did better was staying inside a requested area and honouring filters, and ranking an act among a group's own favourites. So Nigiwai does not sell Qloo as a recommender; it uses Qloo where the test said it earns its place, and says what is not verified.
+
+## How it answers Qloo's four questions
+
+| Qloo asks | Where to look |
+|---|---|
+| **Technological implementation:** thorough, skilful, working? | One guarded Qloo path with a private cache, budget and trace; [612 integration tests](docs/QA.md) against real Postgres and Redis, 158 browser tests in real Chrome, live runs against the real Qloo API; a clean clone passed from the README. Qloo's search, insights and entities endpoints put to seven different jobs (table above). |
+| **Design:** a complete, coherent product? | A guest on a phone (consent, picker, Taste Card), an owner on a desktop (crowd map, groups, Soundcheck, Sound plan, Booking Brief, Today), and the public pages, in light and dark, with accessibility checks and zero console errors. See the [screenshots](#screenshots). |
+| **Potential impact:** a real problem, a real audience, shown working? | A venue booker who decides from gut feel or a pitch. The product shows a real crowd, a checked act and a one-page Booking Brief to forward. [Business case](https://nigiwai.knole.me/business). Real users are **not yet verified**; see the limits. |
+| **Quality of the idea:** creative, non-obvious use of Qloo, real understanding? | Using Qloo to rank an act among a crowd's own favourites, per group, instead of asking it for "more like this". A public-lineup start so a room with no guests yet still gets a crowd. |
+
+## Honest limits
+
+Whether the fit score predicts what a crowd will actually enjoy is **NOT VERIFIED** (there is no outcome data). The weights are an uncalibrated starting design. Named groups need guests (60 for a provisional view, 200 for names), and their usefulness to owners is untested. The language-model features have run on NVIDIA's and Google's hosted models, not on Claude. Qloo's terms on showing Qloo-derived names and scores publicly have not been confirmed with Qloo, so the sample briefs are not in this repository. [docs/BUILD_STATE.md](docs/BUILD_STATE.md) lists what is built and how it was tested; [docs/QA.md](docs/QA.md) gives each module a PASS or NOT VERIFIED with its evidence.
+
+## Everything it does
+
 
 - **Try it without an account** (`/` and `/try`): three real venues (Mercury Lounge in New York, The Hideout and Empty Bottle in Chicago), each read from the public lineups of its past events and matched to Qloo. Anyone can open one, check any act against it, see the crowd map and download the Booking Brief. Scores there are provisional and say so; checking a new act calls Qloo, so each network and the whole site have daily limits. Any other music venue on MusicBrainz can be searched for on `/try` and asked for: it is built in the background from its public lineups (a few minutes, over a hundred Qloo calls, a handful of new venues a day for the whole site), opens by itself when ready, is kept for seven days and then deleted.
 - **Guest survey** (`/s/<token>`): consent notice, a type-ahead picker backed by a local index and live Qloo search, optional age band, area (tapped from a list the owner gives, or a short typed place name) and budget, a receipt code, and removal of your own answers. A guest can also name favourite places: searched near the room, offered by name and address, and never a place that stands for a religion, a health service, an orientation, a political body or adult entertainment.
@@ -53,8 +102,6 @@ A guest, on a phone: scan, search, pick, and a Taste Card.
 </p>
 
 And the public pages: the front door, Try a venue (with the search for any venue), the evidence including where Qloo lost, the privacy page and the business case. [All screenshots](docs/screenshots).
-
-**Live:** https://nigiwai.knole.me. Open it, choose a demo venue and check an act; no account is needed.
 
 ## Run it locally
 
@@ -105,13 +152,13 @@ NIGIWAI_MIN_COMPLETION_SECONDS=0
 Three features use a model: the onboarding interview (the owner describes the business in their own words), Ask Nigiwai, and the "AI alone" panel beside a Soundcheck. Everything else works without one, and where a model would speak the page says when none is connected. Choose a service in the API's environment:
 
 - **Anthropic:** `NIGIWAI_ANTHROPIC_KEY_FILE=<a file holding ANTHROPIC_API_KEY=...>`, and `NIGIWAI_ANTHROPIC_WORKSPACE_ID` if the key is not scoped to one workspace (the service then refuses every request and says so).
-- **Any OpenAI-compatible service:** `NIGIWAI_LLM_PROVIDER=openai`, `NIGIWAI_LLM_BASE_URL`, `NIGIWAI_LLM_MODEL` and the key in `NIGIWAI_LLM_API_KEY` (or a file named by `NIGIWAI_LLM_KEY_FILE`). `NIGIWAI_LLM_EXTRA_BODY` is JSON merged into every request.
+- **Any OpenAI-compatible service:** `NIGIWAI_LLM_PROVIDER=openai`, `NIGIWAI_LLM_BASE_URL`, `NIGIWAI_LLM_MODEL` and the key in `NIGIWAI_LLM_API_KEY` (or a file named by `NIGIWAI_LLM_KEY_FILE`). `NIGIWAI_LLM_EXTRA_BODY` is JSON merged into every request. Google Gemini works this way (`https://generativelanguage.googleapis.com/v1beta/openai`, model `gemini-3.5-flash-lite`, extra body `{"reasoning_effort":"minimal"}`); the live site runs on it. The live runs so far used NVIDIA's and Google's hosted models, not Claude.
 
 The product's own checks do not depend on the model: an item must have been returned by a Qloo call, a recorded answer needs a quote the owner wrote, and a failing or busy model hands over to the plain list or the fixed form. `just test-live` runs the model-led features against whichever service is configured (set `NIGIWAI_RUN_LIVE=1`, a model, and a Qloo key); `docs/DECISIONS.md` D27 records what the first real runs showed.
 
 ## Deploy
 
-`docker-compose.prod.yml` runs Postgres, Redis, a one-shot migration, the API and the web app. Copy `.env.prod.example` to `.env.prod`, fill it in and run `docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build`. Put a TLS-terminating reverse proxy in front of the web port that **overwrites** `X-Forwarded-For`; the API trusts that header for rate limiting. `NIGIWAI_PUBLIC_BASE_URL` must be the public address: poster QR codes, booking-brief links and team invitation links are built from it. The web app sends a Content-Security-Policy and a Strict-Transport-Security header; the proxy should pass them through. Migrations run as the table-owner role and the API as a separate non-owner role, and the API refuses to start if it is connected as a role that would bypass row-level security. Build the demo venues once with `docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm worker python -m nigiwai_api.demo`; the worker service then refreshes them weekly.
+`docker-compose.prod.yml` runs Postgres, Redis, a one-shot migration, the API and the web app. Copy `.env.prod.example` to `.env.prod`, fill it in and run `docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build`. For TLS add `--profile tls` with `NIGIWAI_SITE_ADDRESS` (a Caddy container gets the certificate), or run a Cloudflare tunnel to the web port (`--profile tunnel` adds a proxy that keeps Cloudflare from injecting its analytics script; `docs/DECISIONS.md` D45). Otherwise put a TLS-terminating reverse proxy in front of the web port that **overwrites** `X-Forwarded-For`; the API trusts that header for rate limiting. `NIGIWAI_PUBLIC_BASE_URL` must be the public address: poster QR codes, booking-brief links and team invitation links are built from it. The web app sends a Content-Security-Policy and a Strict-Transport-Security header; the proxy should pass them through. Migrations run as the table-owner role and the API as a separate non-owner role, and the API refuses to start if it is connected as a role that would bypass row-level security. Build the demo venues once with `docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm worker python -m nigiwai_api.demo`; the worker service then refreshes them weekly.
 
 ## Layout
 
