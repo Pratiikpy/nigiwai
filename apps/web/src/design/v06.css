@@ -168,3 +168,16 @@
   .pubnav { flex: 1 1 100%; gap: 0 var(--s-4); }
   .stackcard .arc { display: none; }
 }
+
+/* The front page: the product on the right of the first screen, text on the left. */
+.hero.hero--split { display: grid; gap: var(--s-6); align-items: center; max-width: none; }
+.hero__copy { display: grid; gap: var(--s-5); max-width: 62ch; }
+.hero__figure { margin: 0; display: grid; gap: var(--s-2); justify-items: center; }
+.hero__figure img { width: min(100%, 440px); height: auto; border-radius: var(--r-lg); border: 3px solid var(--ink); box-shadow: 10px 10px 0 var(--brand); background: var(--surface); }
+.hero__figure figcaption { max-width: 42ch; text-align: center; }
+@media (min-width: 960px) {
+  .hero--split { grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); }
+}
+@media (max-width: 560px) {
+  .hero__figure img { width: calc(100% - 8px); box-shadow: 6px 6px 0 var(--brand); }
+}

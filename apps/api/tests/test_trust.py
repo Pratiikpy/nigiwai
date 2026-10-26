@@ -23,7 +23,7 @@ async def test_the_waitlist_keeps_an_email_and_the_consent_version_and_answers_a
 ) -> None:
     consent = (await world.client().get("/v1/public/waitlist/consent")).json()
     assert (
-        consent["version"] == "waitlist-v1"
+        consent["version"] == "waitlist-v2"
         and "do not join it to any survey data" in consent["body"]
     )
     first = await join(world, "Owner@Example.com ")
@@ -33,7 +33,7 @@ async def test_the_waitlist_keeps_an_email_and_the_consent_version_and_answers_a
     }
     rows = admin.execute("SELECT email, consent_version FROM waitlist").fetchall()
     assert (
-        rows == [("Owner@example.com", "waitlist-v1")]
+        rows == [("Owner@example.com", "waitlist-v2")]
     )  # once, with the domain in lower case as email addresses define it, and the text version they saw
 
 

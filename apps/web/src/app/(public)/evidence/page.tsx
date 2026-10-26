@@ -37,6 +37,28 @@ export default function EvidencePage() {
         <p className="meta">Of {evidence.proofs.length} research tests, updated {evidence.updated}. Each is also listed below with how it was run and what it does not show.</p>
       </section>
 
+      <section className="card" aria-labelledby="h-gl" data-testid="glossary">
+        <h2 className="card__title" id="h-gl">
+          How to read the words and numbers
+        </h2>
+        <ul className="ticks">
+          <li>
+            <strong>Won, tied, lost, open</strong> describe what a test showed about using Qloo for that job: won means the result supports it, tied means no measurable
+            difference from the comparison, lost means Qloo did worse, open means it is not settled.
+          </li>
+          <li>
+            <strong>An AI alone</strong> is a language model with no tools and no Qloo data, asked the same question.
+          </li>
+          <li>
+            <strong>Precision at 10</strong> is the share of the first ten results that real people also picked; <strong>recall at 20</strong> is the share of what people picked that appeared in
+            the first twenty. Higher is better.
+          </li>
+          <li>
+            <strong>AUC</strong> is the chance that a score ranks something people picked above something they did not: 0.5 is a coin toss, 1 is perfect.
+          </li>
+        </ul>
+      </section>
+
       <section className="proofs" aria-label="Research tests">
         {evidence.proofs.map((p) => (
           <article className="card proof" key={p.id} data-testid="proof" id={`proof-${p.id}`}>

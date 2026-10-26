@@ -77,7 +77,7 @@ test("business case: the waitlist asks for consent, answers a repeat like a firs
   await field.fill(email);
   await join.click();
   await expect(page.getByText("You’re on the list.")).toBeVisible();
-  expect((await sql("SELECT consent_version FROM waitlist WHERE email_key = $1", [email])).rows).toEqual([{ consent_version: "waitlist-v1" }]);
+  expect((await sql("SELECT consent_version FROM waitlist WHERE email_key = $1", [email])).rows).toEqual([{ consent_version: "waitlist-v2" }]);
   // the same address again says the same thing and stores nothing new
   await page.goto("/business");
   await page.getByLabel("Work email").fill(email.toUpperCase());

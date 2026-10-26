@@ -35,7 +35,10 @@ test("landing: the front door says what it is, lists the real venues and needs n
   // every card says where its crowd comes from, in the product's own label
   await expect(page.getByTestId("venue-card").first()).toContainText("public lineups");
   await expect(page.getByRole("link", { name: "Create an account" }).first()).toBeVisible();
-  await expect(page.getByText("Where an AI service is connected")).toBeVisible();
+  // the first screen shows the product, and the film is one click away
+  await expect(page.getByRole("img", { name: /A Soundcheck: an act scored 94 out of 100/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Watch the 2-minute film" })).toHaveAttribute("href", "https://youtu.be/3dFhP7JRtY0");
+  await expect(page.getByText("the same question goes to an AI alone")).toBeVisible();
   await shot(page, info, "landing");
   await a11y(page, "landing");
   await setTheme(page, "dark");

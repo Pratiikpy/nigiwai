@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { DemoVenues } from "@/components/DemoVenues";
 import { Icon } from "@/components/Icon";
@@ -12,23 +13,40 @@ export const metadata: Metadata = {
 export default function Home() {
   return (
     <>
-      <section className="hero" aria-labelledby="h-hero">
-        <p className="eyebrow">Nigiwai</p>
-        <h1 id="h-hero">Soundcheck any act on your crowd before you book it.</h1>
-        <p>
-          See who your room really draws, how well an act fits each group, and what the numbers rest on. Every score shows its working and the
-          Qloo calls behind it.
-        </p>
-        <div className="row row--wrap">
-          <Link className="btn btn--primary btn--lg" href="/try">
-            <Icon name="bolt" />
-            Try a venue
-          </Link>
-          <Link className="btn btn--lg" href="/evidence">
-            <Icon name="list" />
-            Read the evidence
-          </Link>
+      <section className="hero hero--split" aria-labelledby="h-hero">
+        <div className="hero__copy">
+          <p className="eyebrow">For rooms that book music</p>
+          <h1 id="h-hero">Soundcheck any act on your crowd before you book it.</h1>
+          <p>
+            See who your room really draws, how well an act fits each group, and what the numbers rest on. Every score shows its working and the
+            Qloo calls behind it.
+          </p>
+          <div className="row row--wrap">
+            <Link className="btn btn--primary btn--lg" href="/try">
+              <Icon name="bolt" />
+              Try a venue
+            </Link>
+            <Link className="btn btn--lg" href="/evidence">
+              <Icon name="list" />
+              Read the evidence
+            </Link>
+            <a className="btn btn--lg" href="https://youtu.be/3dFhP7JRtY0" target="_blank" rel="noopener noreferrer">
+              <Icon name="screen" />
+              Watch the 2-minute film
+            </a>
+          </div>
         </div>
+        <figure className="hero__figure">
+          <Image
+            src="/img/sample-soundcheck.png"
+            alt="A Soundcheck: an act scored 94 out of 100 for a crowd, with its range, how each of the crowd's three groups ranks it, why it fits, what to watch out for and the nights it suits"
+            width={606}
+            height={768}
+            unoptimized
+            priority
+          />
+          <figcaption className="meta">A Soundcheck on a made-up room and an invented act, so no Qloo data is shown here. Open a real room below.</figcaption>
+        </figure>
       </section>
 
       <section aria-labelledby="h-v">
@@ -48,8 +66,8 @@ export default function Home() {
           <Icon name="compare" />
           <h3>The comparison is on screen</h3>
           <p>
-            Where an AI service is connected, each check sits next to what an AI alone says, with ties shown as ties. Where none is, the panel says
-            so instead of guessing.
+            Beside each check, the same question goes to an AI alone, with ties shown as ties. If no AI can answer, the panel says so instead of
+            guessing.
           </p>
         </div>
         <div className="fact">

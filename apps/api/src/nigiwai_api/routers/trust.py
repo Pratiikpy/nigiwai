@@ -18,9 +18,9 @@ from .public import limit
 public = APIRouter(prefix="/v1/public", tags=["trust"])
 owner = APIRouter(prefix="/v1/tenants/{tenant_id}", tags=["trust"])
 
-WAITLIST_VERSION = "waitlist-v1"
+WAITLIST_VERSION = "waitlist-v2"
 WAITLIST_CONSENT = (
-    "We keep your email address and the version of this text to tell you when Nigiwai opens. "
+    "We keep your email address and the version of this text to tell you about Nigiwai's launch and pricing. "
     "We do not join it to any survey data, and we do not share it. You can ask us to delete it at any time."
 )
 

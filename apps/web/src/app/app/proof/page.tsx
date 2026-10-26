@@ -72,7 +72,7 @@ export default function ProofPage() {
       <section className="card stack" aria-labelledby="h-int" data-testid="integrity">
         <div className="row row--between row--wrap">
           <h2 className="card__title" id="h-int">
-            Invented items
+            Items Qloo did not return
           </h2>
           <Label kind="observed" detail="checked against what Qloo returned" />
         </div>

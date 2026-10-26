@@ -112,7 +112,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
               />
             </div>
             <p className="field__hint" id="password-hint">
-              {signup ? "At least 10 characters. A few random words is stronger than a clever one." : null}
+              {signup ? "At least 10 characters. A few random words is stronger than a clever one. " : null}
               <button type="button" className="linklike" onClick={() => setShow((v) => !v)} aria-pressed={show}>
                 {show ? "Hide password" : "Show password"}
               </button>

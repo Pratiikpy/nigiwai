@@ -81,7 +81,7 @@ function DontDoPanel({ doc, link }: { doc: DontDo; link: string }) {
     <details className="disc" data-testid="dont-do" data-state={doc.state}>
       <summary>
         <Icon name="chev-r" />
-        Acts to leave off, and stretch picks <Label kind="modelled" /> <span className="meta">idea only</span>
+        Acts to leave off, and stretch picks <Label kind="modelled" detail="idea only" />
       </summary>
       <div className="disc__body stack">
         <p className="meta" data-testid="dont-do-note">

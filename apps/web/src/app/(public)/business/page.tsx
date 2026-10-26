@@ -38,6 +38,8 @@ export default function BusinessPage() {
               "Quiet weeknights and bookings chosen on gut feel.",
               "Existing tools handle logistics or audience marketing, not “does this act fit the crowd I have”.",
               "Background music is picked by business type and mood, not by who is there.",
+              "Tickets and tabs say how many came, not who they were.",
+              "A booker's pitch says what an act has done elsewhere, not what this room's regulars like.",
             ].map((t) => (
               <li key={t}>
                 <Icon name="alert" />

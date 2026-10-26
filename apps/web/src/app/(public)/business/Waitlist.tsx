@@ -44,7 +44,7 @@ export function Waitlist() {
   if (done) {
     return (
       <Notice tone="ok">
-        <strong>You’re on the list.</strong> We’ll write once, when Nigiwai opens.
+        <strong>You’re on the list.</strong> We’ll write once, when pricing and launch are settled.
       </Notice>
     );
   }

@@ -36,7 +36,7 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
       <footer className="pubfoot">
-        <p>Nigiwai is a working name. Taste data comes from Qloo; it describes the aggregate taste of groups and is never used to infer anything about a person.</p>
+        <p>Nigiwai reads a room&rsquo;s crowd from what its guests love. Taste data comes from Qloo; it describes the aggregate taste of groups and is never used to infer anything about a person.</p>
         <p>
           <Link href="/privacy">Privacy</Link> · <Link href="/evidence">Evidence</Link> · MIT licensed
         </p>
